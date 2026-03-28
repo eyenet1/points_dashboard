@@ -1,6 +1,7 @@
 // src/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { DefaultEventsMap } from "@socket.io/component-emitter";
 
 interface PointsData {
   device_id: string;
@@ -81,14 +82,18 @@ export default function Dashboard() {
   // ---------------- Socket.IO live updates ----------------
   useEffect(() => {
     if (!deviceId) return;
-    const socket: Socket = io(SOCKET_URL);
+
+    const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
 
     socket.on("connect", () => console.log("Connected to Socket.IO"));
     socket.on("points_update", (data: PointsData) => {
       if (data.device_id === deviceId) setPoints(data.total_points);
     });
 
-    return () => socket.disconnect();
+    // Cleanup function
+    return () => {
+      socket.disconnect();
+    };
   }, [deviceId]);
 
   // ---------------- Share ----------------
@@ -141,7 +146,7 @@ export default function Dashboard() {
       const res = await fetch(`${SOCKET_URL}/link-phone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id, phone }),
+        body: JSON.stringify({ device_id: deviceId, phone }),
       });
       const data = await res.json();
       if (data.status === "ok") {

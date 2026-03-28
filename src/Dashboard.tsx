@@ -8,85 +8,75 @@ interface PointsData {
 }
 
 const SOCKET_URL = "http://178.18.242.203:5000";
+// 👉 change this to your real landing/app link
+const APP_LINK = "https://yourapp.com/download";
 
 export default function Dashboard() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [points, setPoints] = useState<number>(0);
 
-  const [referralCode, setReferralCode] = useState<string>(""); // NEW
+  const [referralCode, setReferralCode] = useState<string>("");
   const [referralCount, setReferralCount] = useState<number>(0);
   const [referrals, setReferrals] = useState<string[]>([]);
+
+  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "account">("home");
 
   const goal = 2500;
   const reward = "Ksh 1000";
 
   // ---------------- Android bridge ----------------
   useEffect(() => {
-    const getAndroidData = async () => {
-      try {
-        const Android = (window as any).Android;
+    try {
+      const Android = (window as any).Android;
 
-        if (Android && Android.getDeviceId && Android.getPhone) {
-          const id = Android.getDeviceId();
-          const ph = Android.getPhone();
-
-          setDeviceId(id || null);
-          setPhone(ph || null);
-        } else {
-          throw new Error("Android bridge not available");
-        }
-      } catch (e) {
-        setDeviceId("test_device_123");
-        setPhone("+254700000000");
+      if (Android && Android.getDeviceId && Android.getPhone) {
+        setDeviceId(Android.getDeviceId());
+        setPhone(Android.getPhone());
+      } else {
+        throw new Error("No Android bridge");
       }
-    };
-
-    getAndroidData();
+    } catch {
+      setDeviceId("test_device_123");
+      setPhone("+254700000000");
+    }
   }, []);
 
-  // ---------------- Fetch referral code ----------------
+  // ---------------- Register fetch (get referral code) ----------------
   useEffect(() => {
     if (!deviceId) return;
 
-    fetch(`${SOCKET_URL}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId, token: "dummy_token" }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setReferralCode(data.referral_code || "");
+    fetch(`${SOCKET_URL}/api/devices`)
+      .then(res => res.json())
+      .then((devices) => {
+        const d = devices.find((x: any) => x.device_id === deviceId);
+        if (d?.referral_code) setReferralCode(d.referral_code);
       })
-      .catch(console.error);
+      .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- Fetch initial points ----------------
+  // ---------------- Leaderboard ----------------
   useEffect(() => {
     if (!deviceId) return;
 
     fetch(`${SOCKET_URL}/api/leaderboard?top=100`)
-      .then((res) => res.json())
-      .then((data) => {
-        const deviceData = data.leaderboard.find(
-          (d: any) => d.device_id === deviceId
-        );
-        if (deviceData) setPoints(deviceData.points);
-      })
-      .catch(console.log);
+      .then(res => res.json())
+      .then(data => {
+        const d = data.leaderboard.find((x: any) => x.device_id === deviceId);
+        if (d) setPoints(d.points);
+      });
   }, [deviceId]);
 
-  // ---------------- Fetch referral data ----------------
+  // ---------------- Referrals ----------------
   useEffect(() => {
     if (!deviceId) return;
 
     fetch(`${SOCKET_URL}/api/referrals/${deviceId}`)
-      .then((res) => res.json())
-      .then((data) => {
+      .then(res => res.json())
+      .then(data => {
         setReferralCount(data.referral_count || 0);
         setReferrals(data.referrals || []);
-      })
-      .catch(console.log);
+      });
   }, [deviceId]);
 
   // ---------------- Socket.IO live updates ----------------
@@ -103,16 +93,37 @@ export default function Dashboard() {
       }
     });
 
-    return () => socket.disconnect();
+    // ✅ Proper cleanup for TypeScript
+    return () => {
+      socket.disconnect();
+    };
   }, [deviceId]);
 
-  const remaining = Math.max(goal - points, 0);
-  const progress = Math.min((points / goal) * 100, 100);
+  // ---------------- Share Logic ----------------
+  const referralLink = `${APP_LINK}?ref=${referralCode}`;
+  const shareText = `🔥 Earn money with this app!\n\nUse my referral code: ${referralCode}\n\nDownload here: ${referralLink}`;
+
+  const shareWhatsApp = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`);
+  };
+
+  const shareTelegram = () => {
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`);
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(referralLink);
+    alert("✅ Link copied!");
+  };
 
   // ---------------- Withdraw ----------------
   const handleWithdraw = async () => {
     if (!deviceId || !phone) return;
-    if (points < goal) return alert("You need at least 2500 points to withdraw.");
+
+    if (points < goal) {
+      alert("Need 2500 points");
+      return;
+    }
 
     try {
       const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
@@ -120,112 +131,108 @@ export default function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ device_id: deviceId, phone, points: goal }),
       });
+
       const data = await res.json();
       if (data.success) {
-        alert("✅ Withdrawal request sent!");
+        alert("✅ Request sent");
         if (data.new_points !== undefined) setPoints(data.new_points);
-      } else alert(`❌ ${data.message || "Withdrawal failed"}`);
+      } else {
+        alert(`❌ ${data.message || "Withdrawal failed"}`);
+      }
     } catch (err) {
       console.error(err);
       alert("❌ Server error");
     }
   };
 
-  // ---------------- Referral Share ----------------
-  const shareReferral = () => {
-    if (!referralCode || !phone) return;
-    const text = `Join me and earn points! Use my referral code: ${referralCode}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(whatsappUrl, "_blank");
-  };
-
-  const copyReferral = () => {
-    navigator.clipboard.writeText(referralCode);
-    alert("Referral code copied!");
-  };
+  const progress = Math.min((points / goal) * 100, 100);
 
   // ---------------- UI ----------------
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center py-12 px-4">
-      <h1 className="text-4xl font-extrabold text-cyan-400 mb-8">📱 My Dashboard</h1>
+    <div className="min-h-screen bg-gray-900 text-white p-4">
 
-      {/* Reward Card */}
-      <div className="bg-gray-800 rounded-3xl p-6 w-full max-w-sm space-y-4 border border-cyan-500">
-        <h2 className="text-xl text-gray-300 font-semibold">Get Money</h2>
-        <p className="text-gray-400 text-sm">
-          Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left
-        </p>
-        <div className="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
-          <div className="h-4 bg-cyan-400 transition-all duration-500" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="bg-cyan-500 rounded-2xl p-4 flex justify-between text-black font-bold">
-          <span>{reward}</span>
-          <span>Visa</span>
-        </div>
-        <button
-          onClick={handleWithdraw}
-          disabled={points < goal}
-          className={`rounded-xl py-2 font-semibold ${points >= goal ? "bg-cyan-400 text-black" : "bg-gray-600 text-gray-400"}`}
-        >
-          Withdraw
-        </button>
+      {/* MENU */}
+      <div className="flex justify-around mb-6 bg-gray-800 p-3 rounded-xl">
+        <button onClick={() => setActiveTab("home")}>🏠 Home</button>
+        <button onClick={() => setActiveTab("referrals")}>👥 Referrals</button>
+        <button onClick={() => setActiveTab("account")}>👤 Account</button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-10 w-full max-w-4xl">
-        <div className="bg-gray-800 rounded-3xl p-6 border border-cyan-500 text-center">
-          <h3 className="text-gray-300">Points</h3>
-          <p className="text-3xl text-cyan-400">{points}</p>
-        </div>
-        <div className="bg-gray-800 rounded-3xl p-6 border border-yellow-500 text-center">
-          <h3 className="text-gray-300">Referrals</h3>
-          <p className="text-3xl text-yellow-400">{referralCount}</p>
-        </div>
-        <div className="bg-gray-800 rounded-3xl p-6 border border-pink-500 text-center">
-          <h3 className="text-gray-300">Phone</h3>
-          <p className="text-pink-400">{phone}</p>
-        </div>
-        <div className="bg-gray-800 rounded-3xl p-6 border border-green-500 text-center">
-          <h3 className="text-gray-300">Device ID</h3>
-          <p className="text-green-400 break-all">{deviceId}</p>
-        </div>
-      </div>
+      {/* ---------------- HOME ---------------- */}
+      {activeTab === "home" && (
+        <div className="space-y-6">
+          <div className="bg-gray-800 p-6 rounded-xl">
+            <h2>Earn Reward</h2>
 
-      {/* Menu & Referral Share */}
-      <div className="mt-10 flex flex-col items-center space-y-4 w-full max-w-sm">
-        <h2 className="text-xl text-white mb-2">Referral Menu</h2>
-        <div className="flex space-x-4">
-          <button
-            onClick={copyReferral}
-            className="bg-yellow-500 px-4 py-2 rounded-xl font-bold text-black"
-          >
-            Copy Code
-          </button>
-          <button
-            onClick={shareReferral}
-            className="bg-green-500 px-4 py-2 rounded-xl font-bold text-black"
-          >
-            Share via WhatsApp
-          </button>
-        </div>
-        <p className="text-gray-400 mt-2">Your referral code: <span className="text-cyan-400 font-bold">{referralCode}</span></p>
-      </div>
+            <div className="w-full bg-gray-700 h-4 rounded mt-3">
+              <div
+                className="bg-cyan-400 h-4"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
 
-      {/* Referral List */}
-      <div className="mt-10 w-full max-w-3xl">
-        <h2 className="text-xl text-white mb-4">Your Referrals</h2>
-        <div className="bg-gray-800 rounded-xl p-4 max-h-64 overflow-y-auto">
-          {referrals.length === 0 ? (
-            <p className="text-gray-400">No referrals yet</p>
-          ) : (
-            referrals.map((ref, i) => (
-              <div key={i} className="text-sm text-gray-300 border-b border-gray-700 py-2">
-                {ref}
-              </div>
-            ))
-          )}
+            <p className="mt-2">{points} / {goal}</p>
+
+            <button
+              onClick={handleWithdraw}
+              disabled={points < goal}
+              className="bg-cyan-400 text-black px-4 py-2 mt-3 rounded"
+            >
+              Withdraw
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ---------------- REFERRALS ---------------- */}
+      {activeTab === "referrals" && (
+        <div className="space-y-6">
+          <div className="bg-gray-800 p-4 rounded-xl">
+            <h2>Your Code</h2>
+            <p className="text-cyan-400 text-lg">{referralCode}</p>
+
+            <div className="flex gap-2 mt-3">
+              <button onClick={shareWhatsApp} className="bg-green-500 px-3 py-1 rounded">
+                WhatsApp
+              </button>
+
+              <button onClick={shareTelegram} className="bg-blue-500 px-3 py-1 rounded">
+                Telegram
+              </button>
+
+              <button onClick={copyLink} className="bg-gray-600 px-3 py-1 rounded">
+                Copy
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-4 rounded-xl">
+            <h2>Total Referrals: {referralCount}</h2>
+
+            <div className="max-h-40 overflow-y-auto mt-2">
+              {referrals.length === 0 ? (
+                <p className="text-gray-400">No referrals yet</p>
+              ) : (
+                referrals.map((r, i) => (
+                  <div key={i} className="border-b py-1 text-sm">
+                    {r}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- ACCOUNT ---------------- */}
+      {activeTab === "account" && (
+        <div className="bg-gray-800 p-4 rounded-xl space-y-2">
+          <p><b>Phone:</b> {phone}</p>
+          <p><b>Device ID:</b> {deviceId}</p>
+          <p><b>Points:</b> {points}</p>
+        </div>
+      )}
+
     </div>
   );
 }

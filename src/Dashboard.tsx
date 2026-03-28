@@ -23,7 +23,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"home" | "referrals" | "account">("home");
 
   const goal = 2500;
-  const reward = "Ksh 1000";
+ // const reward = "Ksh 1000";
 
   // ---------------- Android bridge ----------------
   useEffect(() => {

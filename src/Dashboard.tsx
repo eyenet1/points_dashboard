@@ -14,22 +14,37 @@ export default function Dashboard() {
   const [phone, setPhone] = useState<string | null>(null);
   const [points, setPoints] = useState<number>(0);
 
-  const goal = 5000; // points required for reward
-  const reward = "$25";
+  const goal = 2500; // points required for reward
+  const reward = "Ksh 1000";
 
   // ---------------- Android bridge or fallback ----------------
   useEffect(() => {
+  const getAndroidData = async () => {
     try {
-      const id = (window as any).Android.getDeviceId();
-      const ph = (window as any).Android.getPhone();
-      setDeviceId(id);
-      setPhone(ph);
-    } catch {
-      console.log("No Android bridge, using fallback");
-      setDeviceId("c7409d51c36e8998"); // test device ID
+      const Android = (window as any).Android;
+
+      if (Android && Android.getDeviceId && Android.getPhone) {
+        const id = Android.getDeviceId();
+        const ph = Android.getPhone();
+
+        console.log("Android detected:", id, ph);
+
+        setDeviceId(id || null);
+        setPhone(ph || null);
+      } else {
+        throw new Error("Android bridge not available");
+      }
+    } catch (e) {
+      console.log("Fallback mode:", e);
+
+      // fallback for browser testing
+      setDeviceId("test_device_123");
       setPhone("+254700000000");
     }
-  }, []);
+  };
+
+  getAndroidData();
+}, []);
 
   // ---------------- Fetch initial points ----------------
   useEffect(() => {
@@ -64,6 +79,52 @@ export default function Dashboard() {
   const remaining = Math.max(goal - points, 0);
   const progress = Math.min((points / goal) * 100, 100);
 
+  // ---------------- Withdraw logic----------------
+const handleWithdraw = async () => {
+  if (!deviceId || !phone) return;
+
+  if (points < goal) {
+    alert("You need at least 2500 points to withdraw.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        device_id: deviceId,
+        phone: phone,
+        points: goal,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alert("✅ Withdrawal request sent!");
+
+      // ✅ use server value (CORRECT)
+      if (data.new_points !== undefined) {
+        setPoints(data.new_points);
+      }
+
+    } else {
+      alert(`❌ ${data.message || "Withdrawal failed"}`);
+    }
+
+  } catch (err) {
+    console.error(err);
+    alert("❌ Server error");
+  }
+};
+
+//--------------------------------------------------------------------------------------------------------------------
+
+
+
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-start py-12 px-4">
       <h1 className="text-4xl font-extrabold text-cyan-400 mb-8 drop-shadow-[0_0_10px_#00fff0]">
@@ -91,10 +152,19 @@ export default function Dashboard() {
           <span>Visa</span>
         </div>
 
-        <button className="bg-transparent border border-cyan-400 text-cyan-400 rounded-xl py-2 font-semibold hover:bg-cyan-400 hover:text-black transition-colors mt-2">
-          Add withdrawal method
-        </button>
-      </div>
+       <button
+          onClick={handleWithdraw}
+          disabled={points < goal}
+           className={`rounded-xl py-2 font-semibold mt-2 transition-colors ${
+            points >= goal
+            ? "bg-cyan-400 text-black hover:bg-cyan-300"
+            : "bg-gray-600 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+             {points >= goal ? "Withdraw" : `withdraw`}
+       </button>
+      
+	  </div>
 
       {/* Points & Device Info */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10 w-full max-w-3xl">

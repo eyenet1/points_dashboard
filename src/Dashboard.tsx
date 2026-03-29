@@ -17,38 +17,45 @@ export default function Dashboard() {
   const [points, setPoints] = useState<number>(0);
   const [referralCount, setReferralCount] = useState<number>(0);
   const [referrals, setReferrals] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "account" | "boost">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "account">("home");
 
   const goal = 2500;
   const reward = "Ksh 1000";
 
   // ---------------- Android bridge ----------------
-  useEffect(() => {
-    try {
-      const Android = (window as any).Android;
-      if (Android?.getDeviceId && Android?.getPhone) {
-        setDeviceId(Android.getDeviceId());
-        setPhone(Android.getPhone());
-      } else {
-        throw new Error();
+ useEffect(() => {
+    const getAndroidData = async () => {
+      try {
+        const Android = (window as any).Android;
+        if (Android && Android.getDeviceId && Android.getPhone) {
+          setDeviceId(Android.getDeviceId() || null);
+          setPhone(Android.getPhone() || "");
+        } else {
+          throw new Error("Android bridge not available");
+        }
+      } catch (e) {
+        // fallback for browser testing
+        setDeviceId("test_device_123");
+        setPhone("+254700000000");
       }
-    } catch {
-      setDeviceId("test_device_123");
-      setPhone("+254700000000");
-    }
+    };
+    getAndroidData();
   }, []);
 
   // ---------------- Fetch referral code (FIXED) ----------------
-  useEffect(() => {
-    if (!deviceId) return;
 
-    fetch(`${SOCKET_URL}/api/referral-code/${deviceId}`)
+ useEffect(() => {
+    if (!deviceId) return;
+    fetch(`${SOCKET_URL}/api/devices`)
       .then((res) => res.json())
-      .then((data) => {
-        if (data.code) setReferralCode(data.code);
+      .then((devices) => {
+        const d = devices.find((x: any) => x.device_id === deviceId);
+        if (d?.referral_code) setReferralCode(d.referral_code);
       })
       .catch(console.log);
   }, [deviceId]);
+
+  
 
   // ---------------- Fetch leaderboard ----------------
   useEffect(() => {
@@ -80,25 +87,20 @@ export default function Dashboard() {
   useEffect(() => {
     if (!deviceId) return;
 
-    const socket: Socket = io(SOCKET_URL, {
-      transports: ["websocket"],
-    });
+    const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
 
-    socket.on("connect", () => {
-      console.log("✅ Connected");
-    });
-
+    socket.on("connect", () => console.log("Connected to Socket.IO"));
     socket.on("points_update", (data: PointsData) => {
-      if (data.device_id === deviceId) {
-        setPoints(data.total_points);
-      }
+      if (data.device_id === deviceId) setPoints(data.total_points);
     });
 
-    // ✅ IMPORTANT FIX: return VOID cleanup
+    // Cleanup function
     return () => {
       socket.disconnect();
     };
   }, [deviceId]);
+
+  
 
   // ---------------- BOOST FEATURE ----------------
   const boostAction = async (type: string, cost: number) => {
@@ -132,36 +134,72 @@ export default function Dashboard() {
     }
   };
 
+ // ---------------- Share ----------------
+  const referralLink = `${APP_LINK}?ref=${referralCode}`;
+  const shareText = `🔥 Earn money with this app!\nUse my referral code: ${referralCode}\nDownload here: ${referralLink}`;
+  const copyLink = () => {
+    navigator.clipboard.writeText(referralLink);
+    alert("✅ Link copied!");
+  };
+
+
+
+  
   // ---------------- Withdraw ----------------
   const handleWithdraw = async () => {
     if (!deviceId || !phone) return;
-
     if (points < goal) {
-      alert(`Need ${goal} points`);
+      alert(`You need at least ${goal} points to withdraw.`);
       return;
     }
 
-    const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ device_id: deviceId, phone, points: goal })
-    });
-
-    const data = await res.json();
-
-    if (data.success) {
-      setPoints(data.new_points);
-      alert("✅ Withdrawal sent");
-    } else {
-      alert("❌ Failed");
+    try {
+      const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, phone, points: goal }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ Withdrawal request sent!");
+        if (data.new_points !== undefined) setPoints(data.new_points);
+      } else {
+        alert(`❌ ${data.message || "Withdrawal failed"}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("❌ Server error");
     }
   };
 
   const remaining = Math.max(goal - points, 0);
   const progress = Math.min((points / goal) * 100, 100);
 
-  const referralLink = `${APP_LINK}?ref=${referralCode}`;
+  // ---------------- Save Account Info ----------------
+  const saveAccountInfo = async () => {
+    if (!deviceId) return alert("Device not ready");
+    if (!phone) return alert("Phone cannot be empty");
 
+    try {
+      const res = await fetch(`${SOCKET_URL}/link-phone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, phone }),
+      });
+      const data = await res.json();
+      if (data.status === "ok") {
+        alert("✅ Phone saved and linked!");
+      } else {
+        alert("❌ Error: " + (data.message || "Unknown error"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("❌ Server error");
+    }
+  };
+
+
+  
   // ---------------- UI ----------------
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">

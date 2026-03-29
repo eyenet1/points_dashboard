@@ -215,7 +215,11 @@ export default function Dashboard() {
           <div className="bg-gray-800 p-6 rounded-xl space-y-4">
             <h2 className="text-xl text-gray-300 font-semibold">Get Money</h2>
             <p className="text-gray-400 text-sm">
-              Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left
+              Total Points <span className="font-bold text-cyan-300">{points}</span> 
+            </p>
+
+            <p className="text-gray-400 text-sm">
+              Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left!!
             </p>
 
             <div className="w-full bg-gray-700 h-4 rounded-full overflow-hidden">

@@ -1,8 +1,14 @@
-import React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import Watch from "./watch";
-function App() {
-  return <Dashboard />;
-}
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/watch" element={<Watch />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

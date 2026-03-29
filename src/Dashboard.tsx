@@ -1,6 +1,7 @@
 // src/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { DefaultEventsMap } from "@socket.io/component-emitter";
 
 interface PointsData {
   device_id: string;
@@ -23,7 +24,7 @@ export default function Dashboard() {
   const reward = "Ksh 1000";
 
   // ---------------- Android bridge ----------------
- useEffect(() => {
+  useEffect(() => {
     const getAndroidData = async () => {
       try {
         const Android = (window as any).Android;
@@ -34,7 +35,6 @@ export default function Dashboard() {
           throw new Error("Android bridge not available");
         }
       } catch (e) {
-        // fallback for browser testing
         setDeviceId("test_device_123");
         setPhone("+254700000000");
       }
@@ -42,9 +42,8 @@ export default function Dashboard() {
     getAndroidData();
   }, []);
 
-  // ---------------- Fetch referral code (FIXED) ----------------
-
- useEffect(() => {
+  // ---------------- Fetch referral code ----------------
+  useEffect(() => {
     if (!deviceId) return;
     fetch(`${SOCKET_URL}/api/devices`)
       .then((res) => res.json())
@@ -55,12 +54,9 @@ export default function Dashboard() {
       .catch(console.log);
   }, [deviceId]);
 
-  
-
   // ---------------- Fetch leaderboard ----------------
   useEffect(() => {
     if (!deviceId) return;
-
     fetch(`${SOCKET_URL}/api/leaderboard?top=100`)
       .then((res) => res.json())
       .then((data) => {
@@ -73,7 +69,6 @@ export default function Dashboard() {
   // ---------------- Fetch referrals ----------------
   useEffect(() => {
     if (!deviceId) return;
-
     fetch(`${SOCKET_URL}/api/referrals/${deviceId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -83,7 +78,7 @@ export default function Dashboard() {
       .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- SOCKET FIX ----------------
+  // ---------------- Socket.IO live updates ----------------
   useEffect(() => {
     if (!deviceId) return;
 
@@ -94,13 +89,10 @@ export default function Dashboard() {
       if (data.device_id === deviceId) setPoints(data.total_points);
     });
 
-    // Cleanup function
     return () => {
       socket.disconnect();
     };
   }, [deviceId]);
-
-  
 
   // ---------------- BOOST FEATURE ----------------
   const boostAction = async (type: string, cost: number) => {
@@ -113,12 +105,8 @@ export default function Dashboard() {
     try {
       const res = await fetch(`${SOCKET_URL}/api/boost`, {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          device_id: deviceId,
-          action: type,
-          cost
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, action: type, cost }),
       });
 
       const data = await res.json();
@@ -134,17 +122,13 @@ export default function Dashboard() {
     }
   };
 
- // ---------------- Share ----------------
+  // ---------------- Share ----------------
   const referralLink = `${APP_LINK}?ref=${referralCode}`;
-  const shareText = `🔥 Earn money with this app!\nUse my referral code: ${referralCode}\nDownload here: ${referralLink}`;
   const copyLink = () => {
     navigator.clipboard.writeText(referralLink);
     alert("✅ Link copied!");
   };
 
-
-
-  
   // ---------------- Withdraw ----------------
   const handleWithdraw = async () => {
     if (!deviceId || !phone) return;
@@ -198,65 +182,82 @@ export default function Dashboard() {
     }
   };
 
-
-  
   // ---------------- UI ----------------
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6">🔥 Dashboard</h1>
 
       {/* MENU */}
-      <div className="flex gap-2 mb-6">
-        <button onClick={() => setActiveTab("home")}>🏠</button>
-        <button onClick={() => setActiveTab("referrals")}>👥</button>
-       
-        <button onClick={() => setActiveTab("account")}>👤</button>
+      <div className="flex gap-3 mb-6 bg-gray-800 p-3 rounded-2xl shadow-md">
+        {[
+          { tab: "home", icon: "🏠", label: "Home" },
+          { tab: "referrals", icon: "👥", label: "Referrals" },
+          { tab: "account", icon: "👤", label: "Account" },
+        ].map(({ tab, icon, label }) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab as any)}
+            className={`flex flex-col items-center px-4 py-2 rounded-xl transition-all duration-200 ${
+              activeTab === tab
+                ? "bg-cyan-500 text-black shadow-md scale-105"
+                : "text-gray-400 hover:bg-gray-700 hover:text-white"
+            }`}
+          >
+            <span className="text-2xl">{icon}</span>
+            <span className="text-sm font-semibold mt-1">{label}</span>
+          </button>
+        ))}
       </div>
 
-    
-      {/* Home */}
+      {/* HOME */}
       {activeTab === "home" && (
-        <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm space-y-4">
-          <h2 className="text-xl text-gray-300 font-semibold">Get Money</h2>
-          <p className="text-gray-400 text-sm">Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left</p>
+        <div className="space-y-4 w-full max-w-sm">
+          <div className="bg-gray-800 p-6 rounded-xl space-y-4">
+            <h2 className="text-xl text-gray-300 font-semibold">Get Money</h2>
+            <p className="text-gray-400 text-sm">
+              Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left
+            </p>
 
-          <div className="w-full bg-gray-700 h-4 rounded-full overflow-hidden">
-            <div className="h-4 bg-cyan-400 transition-all duration-500" style={{ width: `${progress}%`, boxShadow: "0 0 10px #00fff0, 0 0 20px #00fff0" }} />
+            <div className="w-full bg-gray-700 h-4 rounded-full overflow-hidden">
+              <div
+                className="h-4 bg-cyan-400 transition-all duration-500"
+                style={{ width: `${progress}%`, boxShadow: "0 0 10px #00fff0, 0 0 20px #00fff0" }}
+              />
+            </div>
+
+            <div className="bg-cyan-500 rounded-2xl p-4 flex justify-between items-center text-black font-bold shadow-md mt-2">
+              <span>{reward}</span>
+            </div>
+
+            <button
+              onClick={handleWithdraw}
+              disabled={points < goal}
+              className={`w-full py-2 rounded-xl font-semibold mt-2 transition-colors ${
+                points >= goal ? "bg-cyan-400 text-black hover:bg-cyan-300" : "bg-gray-600 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              Withdraw
+            </button>
           </div>
 
-          <div className="bg-cyan-500 rounded-2xl p-4 flex justify-between items-center text-black font-bold shadow-md mt-2">
-            <span>{reward}</span>
+          {/* BOOST */}
+          <div className="bg-gray-800 p-4 rounded-xl space-y-3">
+            <h2 className="text-lg font-semibold">🚀 Boost Engagement</h2>
+            <button onClick={() => boostAction("like", 500)} className="bg-blue-500 w-full py-2 rounded hover:bg-blue-400 transition">
+              👍 Buy Likes (500 pts)
+            </button>
+            <button onClick={() => boostAction("retweet", 1000)} className="bg-green-500 w-full py-2 rounded hover:bg-green-400 transition">
+              🔁 Buy Retweets (1000 pts)
+            </button>
+            <button onClick={() => boostAction("follow", 2500)} className="bg-purple-500 w-full py-2 rounded hover:bg-purple-400 transition">
+              👤 Buy Followers (2500 pts)
+            </button>
           </div>
-
-          <button
-            onClick={handleWithdraw}
-            disabled={points < goal}
-            className={`w-full py-2 rounded-xl font-semibold mt-2 transition-colors ${points >= goal ? "bg-cyan-400 text-black hover:bg-cyan-300" : "bg-gray-600 text-gray-400 cursor-not-allowed"}`}
-          >
-            Withdraw
-          </button>
         </div>
-         <div className="bg-gray-800 p-4 rounded w-full max-w-sm space-y-3">
-          <h2 className="text-lg">🚀 Boost Engagement</h2>
-
-          <button onClick={() => boostAction("like", 500)} className="bg-blue-500 w-full py-2 rounded">
-            👍 Buy Likes (500 pts)
-          </button>
-
-          <button onClick={() => boostAction("retweet", 1000)} className="bg-green-500 w-full py-2 rounded">
-            🔁 Buy Retweets (1000 pts)
-          </button>
-
-          <button onClick={() => boostAction("follow", 2500)} className="bg-purple-500 w-full py-2 rounded">
-            👤 Buy Followers (2500 pts)
-          </button>
-        </div>
-
-      
       )}
 
       {/* REFERRALS */}
-   {activeTab === "referrals" && (
+      {activeTab === "referrals" && (
         <div className="space-y-6 w-full max-w-md">
           <div className="bg-gray-800 p-4 rounded-xl">
             <h2>Your Code</h2>
@@ -267,7 +268,9 @@ export default function Dashboard() {
               className="bg-gray-700 text-white px-3 py-1 rounded w-full"
             />
             <div className="flex gap-2 mt-3">
-             <button onClick={copyLink} className="bg-blue-600 px-3 py-1 rounded">Copy</button>
+              <button onClick={copyLink} className="bg-blue-600 px-3 py-1 rounded hover:bg-blue-500 transition">
+                Copy
+              </button>
             </div>
           </div>
 
@@ -281,11 +284,10 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-)}
+      )}
 
-    
       {/* ACCOUNT */}
-     {activeTab === "account" && (
+      {activeTab === "account" && (
         <div className="bg-gray-800 p-4 rounded-xl w-full max-w-sm space-y-4">
           <div>
             <label className="text-gray-300 font-semibold">Phone:</label>

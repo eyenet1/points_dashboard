@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
-import Watch from "./watch";
+import Watch from "./Watch";
 
 export default function App() {
   return (

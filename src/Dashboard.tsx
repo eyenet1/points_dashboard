@@ -319,9 +319,9 @@ const startWatching = async (type: string) => {
               onClick={() => startWatching(item.type)}
               className="min-w-[180px] cursor-pointer hover:scale-105 transition"
             >
-              <img
+            <img
   src={item.img}
-  alt={item.title || "content thumbnail"}
+  alt={item.name}
   className="rounded-lg w-full h-[100px] object-cover"
 />
               <p className="text-sm mt-1">{item.name}</p>

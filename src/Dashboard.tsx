@@ -196,20 +196,34 @@ export default function Dashboard() {
       )}
 
       {/* REFERRALS */}
-      {activeTab === "referrals" && (
-        <div className="bg-gray-800 p-4 rounded w-full max-w-sm">
-          <p>Code:</p>
-          <input value={referralCode} readOnly className="bg-gray-700 w-full p-1" />
-          <p className="mt-2">Referrals: {referralCount}</p>
+     {activeTab === "referrals" && (
+  <div className="bg-gray-800 p-4 rounded w-full max-w-sm">
+    <p className="font-semibold">Your Code:</p>
+    <input value={referralCode} readOnly className="bg-gray-700 w-full p-1 rounded" />
 
-          <button
-            onClick={() => navigator.clipboard.writeText(referralLink)}
-            className="mt-2 bg-gray-600 px-3 py-1 rounded"
-          >
-            Copy Link
-          </button>
-        </div>
+    <p className="mt-3">Total Referrals: {referralCount}</p>
+
+    {/* ✅ FIX: USE referrals */}
+    <div className="mt-2 max-h-40 overflow-y-auto">
+      {referrals.length > 0 ? (
+        referrals.map((r, i) => (
+          <div key={i} className="text-sm border-b border-gray-600 py-1">
+            {r}
+          </div>
+        ))
+      ) : (
+        <p className="text-gray-400 text-sm">No referrals yet</p>
       )}
+    </div>
+
+    <button
+      onClick={() => navigator.clipboard.writeText(referralLink)}
+      className="mt-3 bg-gray-600 px-3 py-1 rounded w-full"
+    >
+      Copy Link
+    </button>
+  </div>
+)}
 
       {/* BOOST */}
       {activeTab === "boost" && (

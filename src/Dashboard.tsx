@@ -1,7 +1,6 @@
 // src/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import { DefaultEventsMap } from "@socket.io/component-emitter";
 
 interface PointsData {
   device_id: string;
@@ -16,9 +15,12 @@ export default function Dashboard() {
   const [phone, setPhone] = useState<string>("");
   const [referralCode, setReferralCode] = useState<string>("");
   const [points, setPoints] = useState<number>(0);
+  const [referralCount, setReferralCount] = useState<number>(0);
+  const [referrals, setReferrals] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "account" | "boost">("home");
 
-  const [boostUrl, setBoostUrl] = useState("");
-  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "account">("home");
+  const goal = 2500;
+  const reward = "Ksh 1000";
 
   // ---------------- Android bridge ----------------
   useEffect(() => {
@@ -28,8 +30,7 @@ export default function Dashboard() {
         setDeviceId(Android.getDeviceId());
         setPhone(Android.getPhone());
       } else {
-        setDeviceId("test_device_123");
-        setPhone("+254700000000");
+        throw new Error();
       }
     } catch {
       setDeviceId("test_device_123");
@@ -37,130 +38,208 @@ export default function Dashboard() {
     }
   }, []);
 
-  // ---------------- Fetch points ----------------
+  // ---------------- Fetch referral code (FIXED) ----------------
   useEffect(() => {
     if (!deviceId) return;
+
+    fetch(`${SOCKET_URL}/api/referral-code/${deviceId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.code) setReferralCode(data.code);
+      })
+      .catch(console.log);
+  }, [deviceId]);
+
+  // ---------------- Fetch leaderboard ----------------
+  useEffect(() => {
+    if (!deviceId) return;
+
     fetch(`${SOCKET_URL}/api/leaderboard?top=100`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         const d = data.leaderboard.find((x: any) => x.device_id === deviceId);
         if (d) setPoints(d.points);
-      });
+      })
+      .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- Socket ----------------
+  // ---------------- Fetch referrals ----------------
   useEffect(() => {
     if (!deviceId) return;
 
-    const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
-
-    socket.on("points_update", (data: PointsData) => {
-      if (data.device_id === deviceId) setPoints(data.total_points);
-    });
-
-    return () => socket.disconnect();
+    fetch(`${SOCKET_URL}/api/referrals/${deviceId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setReferralCount(data.referral_count || 0);
+        setReferrals(data.referrals || []);
+      })
+      .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- BOOST FUNCTION ----------------
-  const handleBoost = async (type: string, amount: number, cost: number) => {
+  // ---------------- SOCKET FIX ----------------
+  useEffect(() => {
     if (!deviceId) return;
-    if (!boostUrl) return alert("Enter URL first");
-    if (points < cost) return alert("Not enough points");
+
+    const socket: Socket = io(SOCKET_URL, {
+      transports: ["websocket"],
+    });
+
+    socket.on("connect", () => {
+      console.log("✅ Connected");
+    });
+
+    socket.on("points_update", (data: PointsData) => {
+      if (data.device_id === deviceId) {
+        setPoints(data.total_points);
+      }
+    });
+
+    // ✅ IMPORTANT FIX: return VOID cleanup
+    return () => {
+      socket.disconnect();
+    };
+  }, [deviceId]);
+
+  // ---------------- BOOST FEATURE ----------------
+  const boostAction = async (type: string, cost: number) => {
+    if (!deviceId) return;
+    if (points < cost) {
+      alert("❌ Not enough points");
+      return;
+    }
 
     try {
       const res = await fetch(`${SOCKET_URL}/api/boost`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           device_id: deviceId,
-          url: boostUrl,
-          type,
-          amount
+          action: type,
+          cost
         })
       });
 
       const data = await res.json();
 
       if (data.success) {
-        alert(`✅ ${amount} ${type} sent!`);
         setPoints(data.new_points);
+        alert(`🚀 Boost activated: ${type}`);
       } else {
         alert("❌ Failed");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Server error");
+    } catch {
+      alert("❌ Server error");
     }
   };
 
+  // ---------------- Withdraw ----------------
+  const handleWithdraw = async () => {
+    if (!deviceId || !phone) return;
+
+    if (points < goal) {
+      alert(`Need ${goal} points`);
+      return;
+    }
+
+    const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ device_id: deviceId, phone, points: goal })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      setPoints(data.new_points);
+      alert("✅ Withdrawal sent");
+    } else {
+      alert("❌ Failed");
+    }
+  };
+
+  const remaining = Math.max(goal - points, 0);
+  const progress = Math.min((points / goal) * 100, 100);
+
+  const referralLink = `${APP_LINK}?ref=${referralCode}`;
+
   // ---------------- UI ----------------
   return (
-    <div className="min-h-screen bg-gray-900 p-4 flex flex-col items-center text-white">
-      <h1 className="text-3xl font-bold text-cyan-400 mb-6">🚀 Boost Dashboard</h1>
+    <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">
+      <h1 className="text-3xl font-bold mb-6">🔥 Dashboard</h1>
 
       {/* MENU */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-2 mb-6">
         <button onClick={() => setActiveTab("home")}>🏠</button>
         <button onClick={() => setActiveTab("referrals")}>👥</button>
+        <button onClick={() => setActiveTab("boost")}>🚀</button>
         <button onClick={() => setActiveTab("account")}>👤</button>
       </div>
 
       {/* HOME */}
       {activeTab === "home" && (
-        <div className="bg-gray-800 p-4 rounded-xl w-full max-w-md space-y-4">
+        <div className="bg-gray-800 p-4 rounded w-full max-w-sm">
+          <p>Points: {points}</p>
+          <p>Remaining: {remaining}</p>
 
-          <h2 className="text-lg">Points: {points}</h2>
-
-          {/* URL INPUT */}
-          <input
-            type="text"
-            placeholder="Paste X (Twitter) URL"
-            value={boostUrl}
-            onChange={(e) => setBoostUrl(e.target.value)}
-            className="w-full p-2 rounded bg-gray-700"
-          />
-
-          {/* BOOST BUTTONS */}
-          <div className="space-y-2">
-
-            <button
-              onClick={() => handleBoost("likes", 50, 20)}
-              className="w-full bg-pink-500 p-2 rounded"
-            >
-              ❤️ 50 Likes (20 pts)
-            </button>
-
-            <button
-              onClick={() => handleBoost("retweets", 20, 25)}
-              className="w-full bg-green-500 p-2 rounded"
-            >
-              🔁 20 Retweets (25 pts)
-            </button>
-
-            <button
-              onClick={() => handleBoost("followers", 10, 30)}
-              className="w-full bg-blue-500 p-2 rounded"
-            >
-              👤 10 Followers (30 pts)
-            </button>
-
+          <div className="bg-gray-700 h-3 rounded mt-2">
+            <div className="bg-cyan-400 h-3" style={{ width: `${progress}%` }} />
           </div>
+
+          <button
+            onClick={handleWithdraw}
+            disabled={points < goal}
+            className="mt-3 bg-cyan-400 text-black px-4 py-2 rounded w-full"
+          >
+            Withdraw {reward}
+          </button>
+        </div>
+      )}
+
+      {/* REFERRALS */}
+      {activeTab === "referrals" && (
+        <div className="bg-gray-800 p-4 rounded w-full max-w-sm">
+          <p>Code:</p>
+          <input value={referralCode} readOnly className="bg-gray-700 w-full p-1" />
+          <p className="mt-2">Referrals: {referralCount}</p>
+
+          <button
+            onClick={() => navigator.clipboard.writeText(referralLink)}
+            className="mt-2 bg-gray-600 px-3 py-1 rounded"
+          >
+            Copy Link
+          </button>
+        </div>
+      )}
+
+      {/* BOOST */}
+      {activeTab === "boost" && (
+        <div className="bg-gray-800 p-4 rounded w-full max-w-sm space-y-3">
+          <h2 className="text-lg">🚀 Boost Engagement</h2>
+
+          <button onClick={() => boostAction("like", 50)} className="bg-blue-500 w-full py-2 rounded">
+            👍 Buy Likes (50 pts)
+          </button>
+
+          <button onClick={() => boostAction("retweet", 100)} className="bg-green-500 w-full py-2 rounded">
+            🔁 Buy Retweets (100 pts)
+          </button>
+
+          <button onClick={() => boostAction("follow", 150)} className="bg-purple-500 w-full py-2 rounded">
+            👤 Buy Followers (150 pts)
+          </button>
         </div>
       )}
 
       {/* ACCOUNT */}
       {activeTab === "account" && (
-        <div className="bg-gray-800 p-4 rounded-xl w-full max-w-md space-y-3">
-          <p><b>Device:</b> {deviceId}</p>
-          <p><b>Phone:</b> {phone}</p>
-          <p><b>Points:</b> {points}</p>
-        </div>
-      )}
+        <div className="bg-gray-800 p-4 rounded w-full max-w-sm space-y-2">
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-gray-700 w-full p-1" />
 
-      {/* REFERRALS (kept simple) */}
-      {activeTab === "referrals" && (
-        <div className="bg-gray-800 p-4 rounded-xl w-full max-w-md">
-          <p>Referral system unchanged</p>
+          <button className="bg-cyan-400 text-black px-4 py-2 rounded w-full">
+            Save
+          </button>
+
+          <p>Device: {deviceId}</p>
         </div>
       )}
     </div>

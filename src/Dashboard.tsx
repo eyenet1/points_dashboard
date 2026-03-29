@@ -30,7 +30,6 @@ export default function Dashboard() {
         const Android = (window as any).Android;
         if (Android && Android.getDeviceId && Android.getPhone) {
           setDeviceId(Android.getDeviceId() || null);
-          localStorage.setItem("deviceId", id);
           setPhone(Android.getPhone() || "");
           
         } else {

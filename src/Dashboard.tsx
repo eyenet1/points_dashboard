@@ -171,89 +171,112 @@ export default function Dashboard() {
       <div className="flex gap-2 mb-6">
         <button onClick={() => setActiveTab("home")}>🏠</button>
         <button onClick={() => setActiveTab("referrals")}>👥</button>
-        <button onClick={() => setActiveTab("boost")}>🚀</button>
+       
         <button onClick={() => setActiveTab("account")}>👤</button>
       </div>
 
-      {/* HOME */}
+    
+      {/* Home */}
       {activeTab === "home" && (
-        <div className="bg-gray-800 p-4 rounded w-full max-w-sm">
-          <p>Points: {points}</p>
-          <p>Remaining: {remaining}</p>
+        <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm space-y-4">
+          <h2 className="text-xl text-gray-300 font-semibold">Get Money</h2>
+          <p className="text-gray-400 text-sm">Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left</p>
 
-          <div className="bg-gray-700 h-3 rounded mt-2">
-            <div className="bg-cyan-400 h-3" style={{ width: `${progress}%` }} />
+          <div className="w-full bg-gray-700 h-4 rounded-full overflow-hidden">
+            <div className="h-4 bg-cyan-400 transition-all duration-500" style={{ width: `${progress}%`, boxShadow: "0 0 10px #00fff0, 0 0 20px #00fff0" }} />
+          </div>
+
+          <div className="bg-cyan-500 rounded-2xl p-4 flex justify-between items-center text-black font-bold shadow-md mt-2">
+            <span>{reward}</span>
           </div>
 
           <button
             onClick={handleWithdraw}
             disabled={points < goal}
-            className="mt-3 bg-cyan-400 text-black px-4 py-2 rounded w-full"
+            className={`w-full py-2 rounded-xl font-semibold mt-2 transition-colors ${points >= goal ? "bg-cyan-400 text-black hover:bg-cyan-300" : "bg-gray-600 text-gray-400 cursor-not-allowed"}`}
           >
-            Withdraw {reward}
+            Withdraw
           </button>
         </div>
+         <div className="bg-gray-800 p-4 rounded w-full max-w-sm space-y-3">
+          <h2 className="text-lg">🚀 Boost Engagement</h2>
+
+          <button onClick={() => boostAction("like", 500)} className="bg-blue-500 w-full py-2 rounded">
+            👍 Buy Likes (500 pts)
+          </button>
+
+          <button onClick={() => boostAction("retweet", 1000)} className="bg-green-500 w-full py-2 rounded">
+            🔁 Buy Retweets (1000 pts)
+          </button>
+
+          <button onClick={() => boostAction("follow", 2500)} className="bg-purple-500 w-full py-2 rounded">
+            👤 Buy Followers (2500 pts)
+          </button>
+        </div>
+
+      
       )}
 
       {/* REFERRALS */}
-     {activeTab === "referrals" && (
-  <div className="bg-gray-800 p-4 rounded w-full max-w-sm">
-    <p className="font-semibold">Your Code:</p>
-    <input value={referralCode} readOnly className="bg-gray-700 w-full p-1 rounded" />
-
-    <p className="mt-3">Total Referrals: {referralCount}</p>
-
-    {/* ✅ FIX: USE referrals */}
-    <div className="mt-2 max-h-40 overflow-y-auto">
-      {referrals.length > 0 ? (
-        referrals.map((r, i) => (
-          <div key={i} className="text-sm border-b border-gray-600 py-1">
-            {r}
+   {activeTab === "referrals" && (
+        <div className="space-y-6 w-full max-w-md">
+          <div className="bg-gray-800 p-4 rounded-xl">
+            <h2>Your Code</h2>
+            <input
+              type="text"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              className="bg-gray-700 text-white px-3 py-1 rounded w-full"
+            />
+            <div className="flex gap-2 mt-3">
+             <button onClick={copyLink} className="bg-blue-600 px-3 py-1 rounded">Copy</button>
+            </div>
           </div>
-        ))
-      ) : (
-        <p className="text-gray-400 text-sm">No referrals yet</p>
-      )}
-    </div>
 
-    <button
-      onClick={() => navigator.clipboard.writeText(referralLink)}
-      className="mt-3 bg-gray-600 px-3 py-1 rounded w-full"
-    >
-      Copy Link
-    </button>
-  </div>
+          <div className="bg-gray-800 p-4 rounded-xl">
+            <h2>Total Referrals: {referralCount}</h2>
+            <div className="max-h-40 overflow-y-auto mt-2">
+              {referrals.map((r, i) => (
+                <div key={i} className="border-b py-1 text-sm text-gray-300">{r}</div>
+              ))}
+              {referrals.length === 0 && <p className="text-gray-400">No referrals yet</p>}
+            </div>
+          </div>
+        </div>
 )}
 
-      {/* BOOST */}
-      {activeTab === "boost" && (
-        <div className="bg-gray-800 p-4 rounded w-full max-w-sm space-y-3">
-          <h2 className="text-lg">🚀 Boost Engagement</h2>
-
-          <button onClick={() => boostAction("like", 50)} className="bg-blue-500 w-full py-2 rounded">
-            👍 Buy Likes (50 pts)
-          </button>
-
-          <button onClick={() => boostAction("retweet", 100)} className="bg-green-500 w-full py-2 rounded">
-            🔁 Buy Retweets (100 pts)
-          </button>
-
-          <button onClick={() => boostAction("follow", 150)} className="bg-purple-500 w-full py-2 rounded">
-            👤 Buy Followers (150 pts)
-          </button>
-        </div>
-      )}
-
+    
       {/* ACCOUNT */}
-      {activeTab === "account" && (
-        <div className="bg-gray-800 p-4 rounded w-full max-w-sm space-y-2">
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-gray-700 w-full p-1" />
-
-          <button className="bg-cyan-400 text-black px-4 py-2 rounded w-full">
+     {activeTab === "account" && (
+        <div className="bg-gray-800 p-4 rounded-xl w-full max-w-sm space-y-4">
+          <div>
+            <label className="text-gray-300 font-semibold">Phone:</label>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-3 py-1 rounded mt-1 bg-gray-700 text-white"
+            />
+          </div>
+          <div>
+            <label className="text-gray-300 font-semibold">Referral Code:</label>
+            <input
+              type="text"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              className="w-full px-3 py-1 rounded mt-1 bg-gray-700 text-white"
+            />
+          </div>
+          <button
+            onClick={saveAccountInfo}
+            className="w-full bg-cyan-400 py-2 rounded-xl text-black font-bold hover:bg-cyan-300"
+          >
             Save
           </button>
 
-          <p>Device: {deviceId}</p>
+          <p><b>Device ID:</b> {deviceId}</p>
+          <p><b>Points:</b> {points}</p>
+          <p><b>Referral Count:</b> {referralCount}</p>
         </div>
       )}
     </div>

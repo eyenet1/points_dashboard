@@ -18,7 +18,7 @@ export default function Dashboard() {
   const [points, setPoints] = useState<number>(0);
   const [referralCount, setReferralCount] = useState<number>(0);
   const [referrals, setReferrals] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "account">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "watch"  | "account">("home");
 
   const goal = 2500;
   const reward = "Ksh 1000";
@@ -182,7 +182,73 @@ export default function Dashboard() {
     }
   };
 
+  const contentRows = [
+  {
+    title: "🔥 Trending",
+    items: [
+      { name: "Action Movie", img: "https://via.placeholder.com/300x170", type: "movies" },
+      { name: "Drama Series", img: "https://via.placeholder.com/300x170", type: "series" },
+      { name: "Live Match", img: "https://via.placeholder.com/300x170", type: "football" },
+    ],
+  },
+  {
+    title: "🎬 Movies",
+    items: [
+      { name: "Fast Action", img: "https://via.placeholder.com/300x170", type: "movies" },
+      { name: "Romance", img: "https://via.placeholder.com/300x170", type: "movies" },
+    ],
+  },
+];
+
+const startWatching = (type: string) => {
+  if (!deviceId) return;
+
+  fetch(`${SOCKET_URL}/api/start_watch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      device_id: deviceId,
+      type,
+    }),
+  });
+
+  // Open WebView page
+  window.location.href = "/watch";
+};
+
+  export default function Watch() {
+  useEffect(() => {
+    const startTime = Date.now();
+
+    return () => {
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+
+      fetch(`${SOCKET_URL}/api/end_watch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_id: localStorage.getItem("deviceId"),
+          duration,
+        }),
+      });
+    };
+  }, []);
+
+  return (
+    <div className="w-full h-screen bg-black">
+      <iframe
+        src="https://dorawatch.one/home/"
+        className="w-full h-full"
+      />
+    </div>
+  );
+}
+
+
+
+
   // ---------------- UI ----------------
+  
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6">🔥 Dashboard</h1>
@@ -192,6 +258,7 @@ export default function Dashboard() {
         {[
           { tab: "home", icon: "🏠", label: "Home" },
           { tab: "referrals", icon: "👥", label: "Referrals" },
+          { tab: "watch", icon: "🎬", label: "Watch" },
           { tab: "account", icon: "👤", label: "Account" },
         ].map(({ tab, icon, label }) => (
           <button
@@ -260,6 +327,39 @@ export default function Dashboard() {
         </div>
       )}
 
+      
+ {/* watch */}
+    {activeTab === "watch" && (
+  <div className="w-full max-w-5xl space-y-6">
+
+    <h1 className="text-2xl font-bold">🎬 Watch & Earn</h1>
+
+    {contentRows.map((row, i) => (
+      <div key={i}>
+        <h2 className="text-lg mb-2">{row.title}</h2>
+
+        <div className="flex gap-4 overflow-x-auto">
+          {row.items.map((item, j) => (
+            <div
+              key={j}
+              onClick={() => startWatching(item.type)}
+              className="min-w-[180px] cursor-pointer hover:scale-105 transition"
+            >
+              <img
+                src={item.img}
+                className="rounded-lg w-full h-[100px] object-cover"
+              />
+              <p className="text-sm mt-1">{item.name}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+
+  </div>
+)}
+
+      
       {/* REFERRALS */}
       {activeTab === "referrals" && (
         <div className="space-y-6 w-full max-w-md">

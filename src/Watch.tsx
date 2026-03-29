@@ -25,10 +25,11 @@ export default function Watch() {
 
   return (
     <div className="w-full h-screen bg-black">
-      <iframe
-        src="https://dorawatch.one/home/"
-        className="w-full h-full"
-      />
+     <iframe
+  src="https://dorawatch.one/home/"
+  title="Watch Movies and Series"
+  className="w-full h-full"
+/>
     </div>
   );
 }

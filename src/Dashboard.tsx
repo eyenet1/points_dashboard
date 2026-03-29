@@ -30,7 +30,9 @@ export default function Dashboard() {
         const Android = (window as any).Android;
         if (Android && Android.getDeviceId && Android.getPhone) {
           setDeviceId(Android.getDeviceId() || null);
+          localStorage.setItem("deviceId", id);
           setPhone(Android.getPhone() || "");
+          
         } else {
           throw new Error("Android bridge not available");
         }
@@ -200,51 +202,24 @@ export default function Dashboard() {
   },
 ];
 
-const startWatching = (type: string) => {
+const startWatching = async (type: string) => {
   if (!deviceId) return;
 
-  fetch(`${SOCKET_URL}/api/start_watch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      device_id: deviceId,
-      type,
-    }),
-  });
+  try {
+    await fetch(`${SOCKET_URL}/api/start_watch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId, type }),
+    });
 
-  // Open WebView page
-  window.location.href = "/watch";
+    window.location.href = "/watch";
+  } catch (err) {
+    console.error(err);
+    alert("❌ Failed to start watching");
+  }
 };
 
-  export default function Watch() {
-  useEffect(() => {
-    const startTime = Date.now();
-
-    return () => {
-      const duration = Math.floor((Date.now() - startTime) / 1000);
-
-      fetch(`${SOCKET_URL}/api/end_watch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device_id: localStorage.getItem("deviceId"),
-          duration,
-        }),
-      });
-    };
-  }, []);
-
-  return (
-    <div className="w-full h-screen bg-black">
-      <iframe
-        src="https://dorawatch.one/home/"
-        className="w-full h-full"
-      />
-    </div>
-  );
-}
-
-
+  
 
 
   // ---------------- UI ----------------

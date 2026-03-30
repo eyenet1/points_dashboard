@@ -4,32 +4,19 @@ const SOCKET_URL = "http://178.18.242.203:5000";
 
 export default function Watch() {
   useEffect(() => {
-    const startTime = Date.now();
+    const deviceId = localStorage.getItem("deviceId");
+    if (!deviceId) return;
 
-    return () => {
-      const duration = Math.floor((Date.now() - startTime) / 1000);
-      const deviceId = localStorage.getItem("deviceId");
+    // ✅ Save start time
+    localStorage.setItem("watch_start", Date.now().toString());
 
-      if (!deviceId) return;
-
-      fetch(`${SOCKET_URL}/api/end_watch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device_id: deviceId,
-          duration,
-        }),
-      });
-    };
+    // ✅ Open Dorawatch
+    window.location.href = "https://dorawatch.one/home/";
   }, []);
 
   return (
-    <div className="w-full h-screen bg-black">
-     <iframe
-  src="https://dorawatch.one/home/"
-  title="Watch Movies and Series"
-  className="w-full h-full"
-/>
+    <div className="flex items-center justify-center h-screen bg-black text-white">
+      <p>🎬 Opening movie... Please wait</p>
     </div>
   );
 }

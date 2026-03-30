@@ -228,21 +228,15 @@ export default function Dashboard() {
   },
 ];
 
-const startWatching = async (type: string) => {
+const startWatching = () => {
+  const deviceId = localStorage.getItem("deviceId");
   if (!deviceId) return;
 
-  try {
-    await fetch(`${SOCKET_URL}/api/start_watch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId, type }),
-    });
+  // save start time
+  localStorage.setItem("watch_start", Date.now().toString());
 
-    window.location.href = "/watch";
-  } catch (err) {
-    console.error(err);
-    alert("❌ Failed to start watching");
-  }
+  // open site
+  window.open("https://dorawatch.one/home/", "_blank");
 };
 
   
@@ -343,7 +337,7 @@ const startWatching = async (type: string) => {
           {row.items.map((item, j) => (
             <div
               key={j}
-              onClick={() => startWatching(item.type)}
+              onClick={startWatching}
               className="min-w-[180px] cursor-pointer hover:scale-105 transition"
             >
             <img

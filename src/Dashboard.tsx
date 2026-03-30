@@ -215,7 +215,7 @@ useEffect(() => {
 
     
      // open in same WebView
-    window.location.href = "https://mtaani.vercel.app/home";
+    window.location.href = "https://dorawatch.one/home/";
   };
 
   // ---------------- UI ----------------

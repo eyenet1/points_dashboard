@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-const SOCKET_URL = "http://178.18.242.203:5000";
+
 
 export default function Watch() {
   useEffect(() => {

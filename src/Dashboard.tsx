@@ -94,19 +94,26 @@ export default function Dashboard() {
       .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- SOCKET.IO LIVE UPDATES ----------------
-  useEffect(() => {
-    if (!deviceId) return;
+  
 
-    const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
+// ---------------- SOCKET.IO LIVE UPDATES ----------------
+useEffect(() => {
+  if (!deviceId) return;
 
-    socket.on("connect", () => console.log("Connected to Socket.IO"));
-    socket.on("points_update", (data: PointsData) => {
-      if (data.device_id === deviceId) setPoints(data.total_points);
-    });
+  const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
 
-    return () => socket.disconnect();
-  }, [deviceId]);
+  socket.on("connect", () => console.log("Connected to Socket.IO"));
+  socket.on("points_update", (data: PointsData) => {
+    if (data.device_id === deviceId) setPoints(data.total_points);
+  });
+
+  // Proper cleanup function
+  return () => {
+    socket.disconnect(); // just disconnect, do NOT return the socket
+  };
+}, [deviceId]);
+
+  
 
   // ---------------- BOOST FEATURE ----------------
   const boostAction = async (type: string, cost: number) => {

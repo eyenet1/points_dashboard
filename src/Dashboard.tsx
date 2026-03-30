@@ -152,7 +152,7 @@ useEffect(() => {
       const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id, phone, points: goal }),
+        body: JSON.stringify({ device_id: deviceId, phone, points: goal }),
       });
       const data = await res.json();
       if (data.success) {

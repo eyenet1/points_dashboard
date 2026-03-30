@@ -18,39 +18,30 @@ export default function Dashboard() {
   const [points, setPoints] = useState<number>(0);
   const [referralCount, setReferralCount] = useState<number>(0);
   const [referrals, setReferrals] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "watch"  | "account">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "referrals" | "watch" | "account">("home");
 
   const goal = 2500;
   const reward = "Ksh 1000";
 
-  
-  //--------------watch time--------------------
+  // ---------------- WATCH TIME ----------------
   useEffect(() => {
-  const start = localStorage.getItem("watch_start");
-  const deviceId = localStorage.getItem("deviceId");
+    const start = localStorage.getItem("watch_start");
+    const deviceId = localStorage.getItem("deviceId");
 
-  if (!start || !deviceId) return;
+    if (!start || !deviceId) return;
 
-  const duration = Math.floor((Date.now() - Number(start)) / 1000);
+    const duration = Math.floor((Date.now() - Number(start)) / 1000);
 
-  // Clear so it doesn't double count
-  localStorage.removeItem("watch_start");
+    localStorage.removeItem("watch_start"); // clear to prevent double-counting
 
-  fetch("http://178.18.242.203:5000/api/end_watch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      device_id: deviceId,
-      duration,
-    }),
-  });
-}, []);
+    fetch(`${SOCKET_URL}/api/end_watch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId, duration }),
+    }).catch(console.error);
+  }, []);
 
-
-
-
-  
-  // ---------------- Android bridge ----------------
+  // ---------------- ANDROID BRIDGE ----------------
   useEffect(() => {
     const getAndroidData = async () => {
       try {
@@ -58,11 +49,8 @@ export default function Dashboard() {
         if (Android && Android.getDeviceId && Android.getPhone) {
           setDeviceId(Android.getDeviceId() || null);
           setPhone(Android.getPhone() || "");
-          
-        } else {
-          throw new Error("Android bridge not available");
-        }
-      } catch (e) {
+        } else throw new Error("Android bridge not available");
+      } catch {
         setDeviceId("test_device_123");
         setPhone("+254700000000");
       }
@@ -70,11 +58,11 @@ export default function Dashboard() {
     getAndroidData();
   }, []);
 
-  // ---------------- Fetch referral code ----------------
+  // ---------------- FETCH REFERRAL CODE ----------------
   useEffect(() => {
     if (!deviceId) return;
     fetch(`${SOCKET_URL}/api/devices`)
-      .then((res) => res.json())
+      .then(res => res.json())
       .then((devices) => {
         const d = devices.find((x: any) => x.device_id === deviceId);
         if (d?.referral_code) setReferralCode(d.referral_code);
@@ -82,11 +70,11 @@ export default function Dashboard() {
       .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- Fetch leaderboard ----------------
+  // ---------------- FETCH LEADERBOARD ----------------
   useEffect(() => {
     if (!deviceId) return;
     fetch(`${SOCKET_URL}/api/leaderboard?top=100`)
-      .then((res) => res.json())
+      .then(res => res.json())
       .then((data) => {
         const d = data.leaderboard.find((x: any) => x.device_id === deviceId);
         if (d) setPoints(d.points);
@@ -94,11 +82,11 @@ export default function Dashboard() {
       .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- Fetch referrals ----------------
+  // ---------------- FETCH REFERRALS ----------------
   useEffect(() => {
     if (!deviceId) return;
     fetch(`${SOCKET_URL}/api/referrals/${deviceId}`)
-      .then((res) => res.json())
+      .then(res => res.json())
       .then((data) => {
         setReferralCount(data.referral_count || 0);
         setReferrals(data.referrals || []);
@@ -106,7 +94,7 @@ export default function Dashboard() {
       .catch(console.log);
   }, [deviceId]);
 
-  // ---------------- Socket.IO live updates ----------------
+  // ---------------- SOCKET.IO LIVE UPDATES ----------------
   useEffect(() => {
     if (!deviceId) return;
 
@@ -117,67 +105,53 @@ export default function Dashboard() {
       if (data.device_id === deviceId) setPoints(data.total_points);
     });
 
-    return () => {
-      socket.disconnect();
-    };
+    return () => socket.disconnect();
   }, [deviceId]);
 
   // ---------------- BOOST FEATURE ----------------
   const boostAction = async (type: string, cost: number) => {
     if (!deviceId) return;
-    if (points < cost) {
-      alert("❌ Not enough points");
-      return;
-    }
+    if (points < cost) return alert("❌ Not enough points");
 
     try {
       const res = await fetch(`${SOCKET_URL}/api/boost`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id: deviceId, action: type, cost }),
+        body: JSON.stringify({ device_id, action: type, cost }),
       });
-
       const data = await res.json();
-
       if (data.success) {
         setPoints(data.new_points);
         alert(`🚀 Boost activated: ${type}`);
-      } else {
-        alert("❌ Failed");
-      }
+      } else alert("❌ Failed");
     } catch {
       alert("❌ Server error");
     }
   };
 
-  // ---------------- Share ----------------
+  // ---------------- SHARE ----------------
   const referralLink = `${APP_LINK}?ref=${referralCode}`;
   const copyLink = () => {
     navigator.clipboard.writeText(referralLink);
     alert("✅ Link copied!");
   };
 
-  // ---------------- Withdraw ----------------
+  // ---------------- WITHDRAW ----------------
   const handleWithdraw = async () => {
     if (!deviceId || !phone) return;
-    if (points < goal) {
-      alert(`You need at least ${goal} points to withdraw.`);
-      return;
-    }
+    if (points < goal) return alert(`You need at least ${goal} points to withdraw.`);
 
     try {
       const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id: deviceId, phone, points: goal }),
+        body: JSON.stringify({ device_id, phone, points: goal }),
       });
       const data = await res.json();
       if (data.success) {
         alert("✅ Withdrawal request sent!");
         if (data.new_points !== undefined) setPoints(data.new_points);
-      } else {
-        alert(`❌ ${data.message || "Withdrawal failed"}`);
-      }
+      } else alert(`❌ ${data.message || "Withdrawal failed"}`);
     } catch (err) {
       console.error(err);
       alert("❌ Server error");
@@ -187,7 +161,7 @@ export default function Dashboard() {
   const remaining = Math.max(goal - points, 0);
   const progress = Math.min((points / goal) * 100, 100);
 
-  // ---------------- Save Account Info ----------------
+  // ---------------- SAVE ACCOUNT INFO ----------------
   const saveAccountInfo = async () => {
     if (!deviceId) return alert("Device not ready");
     if (!phone) return alert("Phone cannot be empty");
@@ -196,14 +170,11 @@ export default function Dashboard() {
       const res = await fetch(`${SOCKET_URL}/link-phone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id: deviceId, phone }),
+        body: JSON.stringify({ device_id, phone }),
       });
       const data = await res.json();
-      if (data.status === "ok") {
-        alert("✅ Phone saved and linked!");
-      } else {
-        alert("❌ Error: " + (data.message || "Unknown error"));
-      }
+      if (data.status === "ok") alert("✅ Phone saved and linked!");
+      else alert("❌ Error: " + (data.message || "Unknown error"));
     } catch (err) {
       console.error(err);
       alert("❌ Server error");
@@ -211,39 +182,35 @@ export default function Dashboard() {
   };
 
   const contentRows = [
-  {
-    title: "🔥 Trending",
-    items: [
-      { name: "Action Movie", img: "https://via.placeholder.com/300x170", type: "movies" },
-      { name: "Drama Series", img: "https://via.placeholder.com/300x170", type: "series" },
-      { name: "Live Match", img: "https://via.placeholder.com/300x170", type: "football" },
-    ],
-  },
-  {
-    title: "🎬 Movies",
-    items: [
-      { name: "Fast Action", img: "https://via.placeholder.com/300x170", type: "movies" },
-      { name: "Romance", img: "https://via.placeholder.com/300x170", type: "movies" },
-    ],
-  },
-];
+    {
+      title: "🔥 Trending",
+      items: [
+        { name: "Action Movie", img: "https://via.placeholder.com/300x170", type: "movies" },
+        { name: "Drama Series", img: "https://via.placeholder.com/300x170", type: "series" },
+        { name: "Live Match", img: "https://via.placeholder.com/300x170", type: "football" },
+      ],
+    },
+    {
+      title: "🎬 Movies",
+      items: [
+        { name: "Fast Action", img: "https://via.placeholder.com/300x170", type: "movies" },
+        { name: "Romance", img: "https://via.placeholder.com/300x170", type: "movies" },
+      ],
+    },
+  ];
 
-const startWatching = () => {
-  const deviceId = localStorage.getItem("deviceId");
-  if (!deviceId) return;
+  // ---------------- WATCH ACTION ----------------
+  const startWatching = () => {
+    if (!deviceId) return;
 
-  // save start time
-  localStorage.setItem("watch_start", Date.now().toString());
+    localStorage.setItem("watch_start", Date.now().toString());
+    localStorage.setItem("deviceId", deviceId);
 
-  // open site
-  window.open("https://dorawatch.one/home/", "_blank");
-};
-
-  
-
+    // open in new tab
+    window.open("https://dorawatch.one/home/", "_blank");
+  };
 
   // ---------------- UI ----------------
-  
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6">🔥 Dashboard</h1>
@@ -277,7 +244,7 @@ const startWatching = () => {
           <div className="bg-gray-800 p-6 rounded-xl space-y-4">
             <h2 className="text-xl text-gray-300 font-semibold">Get Money</h2>
             <p className="text-gray-400 text-sm">
-              Total Points <span className="font-bold text-cyan-300">{points}</span> 
+              Total Points <span className="font-bold text-cyan-300">{points}</span>
             </p>
 
             <p className="text-gray-400 text-sm">
@@ -322,40 +289,35 @@ const startWatching = () => {
         </div>
       )}
 
-      
- {/* watch */}
-    {activeTab === "watch" && (
-  <div className="w-full max-w-5xl space-y-6">
-
-    <h1 className="text-2xl font-bold">🎬 Watch & Earn</h1>
-
-    {contentRows.map((row, i) => (
-      <div key={i}>
-        <h2 className="text-lg mb-2">{row.title}</h2>
-
-        <div className="flex gap-4 overflow-x-auto">
-          {row.items.map((item, j) => (
-            <div
-              key={j}
-              onClick={startWatching}
-              className="min-w-[180px] cursor-pointer hover:scale-105 transition"
-            >
-            <img
-  src={item.img}
-  alt={item.name}
-  className="rounded-lg w-full h-[100px] object-cover"
-/>
-              <p className="text-sm mt-1">{item.name}</p>
+      {/* WATCH */}
+      {activeTab === "watch" && (
+        <div className="w-full max-w-5xl space-y-6 text-center">
+          <h1 className="text-2xl font-bold">🎬 Watch & Earn</h1>
+          <p>Click any content below to open DoraWatch and start earning points (max 30/day)</p>
+          {contentRows.map((row, i) => (
+            <div key={i}>
+              <h2 className="text-lg mb-2">{row.title}</h2>
+              <div className="flex gap-4 overflow-x-auto">
+                {row.items.map((item, j) => (
+                  <div
+                    key={j}
+                    onClick={startWatching}
+                    className="min-w-[180px] cursor-pointer hover:scale-105 transition"
+                  >
+                    <img
+                      src={item.img}
+                      alt={item.name}
+                      className="rounded-lg w-full h-[100px] object-cover"
+                    />
+                    <p className="text-sm mt-1">{item.name}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
-      </div>
-    ))}
+      )}
 
-  </div>
-)}
-
-      
       {/* REFERRALS */}
       {activeTab === "referrals" && (
         <div className="space-y-6 w-full max-w-md">

@@ -1,13 +1,11 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
-import Watch from "./Watch";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/watch" element={<Watch />} />
+        <Route path="*" element={<Dashboard />} />
       </Routes>
     </BrowserRouter>
   );

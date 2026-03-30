@@ -213,8 +213,9 @@ useEffect(() => {
     localStorage.setItem("watch_start", Date.now().toString());
     localStorage.setItem("deviceId", deviceId);
 
-    // open in new tab
-    window.open("https://mtaani.vercel.app/home", "_blank");
+    
+     // open in same WebView
+    window.location.href = "https://mtaani.vercel.app/home";
   };
 
   // ---------------- UI ----------------

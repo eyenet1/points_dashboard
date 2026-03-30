@@ -177,7 +177,7 @@ useEffect(() => {
       const res = await fetch(`${SOCKET_URL}/link-phone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id, phone }),
+        body: JSON.stringify({ device_id: deviceId, phone, points: goal }),
       });
       const data = await res.json();
       if (data.status === "ok") alert("✅ Phone saved and linked!");

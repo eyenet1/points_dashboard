@@ -23,6 +23,33 @@ export default function Dashboard() {
   const goal = 2500;
   const reward = "Ksh 1000";
 
+  
+  //--------------watch time--------------------
+  useEffect(() => {
+  const start = localStorage.getItem("watch_start");
+  const deviceId = localStorage.getItem("deviceId");
+
+  if (!start || !deviceId) return;
+
+  const duration = Math.floor((Date.now() - Number(start)) / 1000);
+
+  // Clear so it doesn't double count
+  localStorage.removeItem("watch_start");
+
+  fetch("http://178.18.242.203:5000/api/end_watch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      device_id: deviceId,
+      duration,
+    }),
+  });
+}, []);
+
+
+
+
+  
   // ---------------- Android bridge ----------------
   useEffect(() => {
     const getAndroidData = async () => {

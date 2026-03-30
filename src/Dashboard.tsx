@@ -214,7 +214,7 @@ useEffect(() => {
     localStorage.setItem("deviceId", deviceId);
 
     // open in new tab
-    window.open("https://dorawatch.one/home/", "_blank");
+    window.open("https://mtaani.vercel.app/home", "_blank");
   };
 
   // ---------------- UI ----------------

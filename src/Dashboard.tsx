@@ -124,7 +124,7 @@ useEffect(() => {
       const res = await fetch(`${SOCKET_URL}/api/boost`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id, action: type, cost }),
+        body: JSON.stringify({ device_id: deviceId, action: type, cost }),
       });
       const data = await res.json();
       if (data.success) {

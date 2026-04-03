@@ -104,16 +104,20 @@ useEffect(() => {
   }, []);
 
   // ---------------- FETCH REFERRAL CODE ----------------
-  useEffect(() => {
-    if (!deviceId) return;
-    fetch(`${SOCKET_URL}/api/user/${deviceId}`)
-      .then(res => res.json())
-      .then((devices) => {
-        const d = devices.find((x: any) => x.device_id === deviceId);
-        if (d?.referral_code) setReferralCode(d.referral_code);
-      })
-      .catch(console.log);
-  }, [deviceId]);
+ useEffect(() => {
+  if (!deviceId) return;
+
+  fetch(`${SOCKET_URL}/api/user/${deviceId}`)
+    .then(res => res.json())
+    .then((data) => {
+      console.log("USER API RESPONSE:", data); // 👈 DEBUG
+
+      if (data?.referral_code) {
+        setReferralCode(data.referral_code);
+      }
+    })
+    .catch(console.error);
+}, [deviceId]);
 
   // ---------------- FETCH LEADERBOARD ----------------
   useEffect(() => {

@@ -22,7 +22,52 @@ export default function Dashboard() {
 
   const goal = 2500;
   const reward = "Ksh 1000";
+ 
+  
+  
+  //------------REFERRAL CODE-----------------------------
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get("ref");
 
+  if (ref) {
+    localStorage.setItem("referral_code", ref);
+    console.log("Referral captured:", ref);
+  }
+}, []);
+
+//---SENDING REFERRAL CODE
+  
+  
+useEffect(() => {
+  if (!deviceId) return;
+
+  // prevent multiple registrations
+  if (localStorage.getItem("registered")) return;
+
+  const referralCode = localStorage.getItem("referral_code");
+
+  fetch(`${SOCKET_URL}/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      device_id: deviceId,
+      token: "web_token_" + deviceId, // temp token for testing
+      referred_by: referralCode, // ✅ THIS IS THE KEY
+    }),
+  })
+    .then(res => res.json())
+    .then(data => {
+      console.log("REGISTER RESPONSE:", data);
+      localStorage.setItem("registered", "true");
+    })
+    .catch(console.error);
+
+}, [deviceId]);
+
+
+
+  
   // ---------------- WATCH TIME ----------------
   useEffect(() => {
     const start = localStorage.getItem("watch_start");
@@ -61,7 +106,7 @@ export default function Dashboard() {
   // ---------------- FETCH REFERRAL CODE ----------------
   useEffect(() => {
     if (!deviceId) return;
-    fetch(`${SOCKET_URL}/api/devices`)
+    fetch(`${SOCKET_URL}/api/user/${deviceId}`)
       .then(res => res.json())
       .then((devices) => {
         const d = devices.find((x: any) => x.device_id === deviceId);

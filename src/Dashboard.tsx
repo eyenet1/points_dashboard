@@ -163,24 +163,27 @@ useEffect(() => {
   const progress = Math.min((points / goal) * 100, 100);
 
   // ---------------- SAVE ACCOUNT INFO ----------------
-  const saveAccountInfo = async () => {
-    if (!deviceId) return alert("Device not ready");
-    if (!phone) return alert("Phone cannot be empty");
+const saveAccountInfo = async () => {
+  if (!deviceId) return alert("Device not ready");
+  if (!phone) return alert("Phone cannot be empty");
 
-    try {
-      const res = await fetch(`${SOCKET_URL}/link-phone`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id: deviceId, phone }),
-      });
-      const data = await res.json();
-      if (data.status === "ok") alert("✅ Phone saved and linked!");
-      else alert("❌ Error: " + (data.message || "Unknown error"));
-    } catch (err) {
-      console.error(err);
-      alert("❌ Server error");
-    }
-  };
+  try {
+    const res = await fetch(`${SOCKET_URL}/link-phone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId, phone, referral_code: referralCode }),
+    });
+    const data = await res.json();
+    if (data.status === "ok") alert("✅ Phone and referral saved!");
+    else alert("❌ Error: " + (data.message || "Unknown error"));
+  } catch (err) {
+    console.error(err);
+    alert("❌ Server error");
+  }
+};
+
+
+  
 
   // ---------------- WATCH ACTION ----------------
   const startWatching = () => {

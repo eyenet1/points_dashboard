@@ -33,29 +33,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  // ---------------- REGISTER DEVICE ----------------
-  useEffect(() => {
-    if (!deviceId) return;
-    if (localStorage.getItem("registered")) return;
-
-    const referredBy = localStorage.getItem("referral_code");
-
-    fetch(`${SOCKET_URL}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        device_id: deviceId,
-        token: "web_token_" + deviceId,
-        referred_by: referredBy,
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        console.log("REGISTER RESPONSE:", data);
-        localStorage.setItem("registered", "true");
-      })
-      .catch(console.error);
-  }, [deviceId]);
+ 
 
   // ---------------- ANDROID BRIDGE ----------------
   useEffect(() => {

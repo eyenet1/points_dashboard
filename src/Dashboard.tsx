@@ -22,76 +22,47 @@ export default function Dashboard() {
 
   const goal = 2500;
   const reward = "Ksh 1000";
- 
-  
-  
-  //------------REFERRAL CODE-----------------------------
-useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const ref = params.get("ref");
 
-  if (ref) {
-    localStorage.setItem("referral_code", ref);
-    console.log("Referral captured:", ref);
-  }
-}, []);
-
-//---SENDING REFERRAL CODE
-  
-  
-useEffect(() => {
-  if (!deviceId) return;
-
-  // prevent multiple registrations
-  if (localStorage.getItem("registered")) return;
-
-  const referralCode = localStorage.getItem("referral_code");
-
-  fetch(`${SOCKET_URL}/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      device_id: deviceId,
-      token: "web_token_" + deviceId, // temp token for testing
-      referred_by: referralCode, // ✅ THIS IS THE KEY
-    }),
-  })
-    .then(res => res.json())
-    .then(data => {
-      console.log("REGISTER RESPONSE:", data);
-      localStorage.setItem("registered", "true");
-    })
-    .catch(console.error);
-
-}, [deviceId]);
-
-
-
-  
-  // ---------------- WATCH TIME ----------------
+  // ---------------- CAPTURE REFERRAL CODE ----------------
   useEffect(() => {
-    const start = localStorage.getItem("watch_start");
-    const deviceId = localStorage.getItem("deviceId");
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      localStorage.setItem("referral_code", ref);
+      console.log("Referral captured:", ref);
+    }
+  }, []);
 
-    if (!start || !deviceId) return;
+  // ---------------- REGISTER DEVICE ----------------
+  useEffect(() => {
+    if (!deviceId) return;
+    if (localStorage.getItem("registered")) return;
 
-    const duration = Math.floor((Date.now() - Number(start)) / 1000);
+    const referredBy = localStorage.getItem("referral_code");
 
-    localStorage.removeItem("watch_start"); // clear to prevent double-counting
-
-    fetch(`${SOCKET_URL}/api/end_watch`, {
+    fetch(`${SOCKET_URL}/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId, duration }),
-    }).catch(console.error);
-  }, []);
+      body: JSON.stringify({
+        device_id: deviceId,
+        token: "web_token_" + deviceId,
+        referred_by: referredBy,
+      }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log("REGISTER RESPONSE:", data);
+        localStorage.setItem("registered", "true");
+      })
+      .catch(console.error);
+  }, [deviceId]);
 
   // ---------------- ANDROID BRIDGE ----------------
   useEffect(() => {
-    const getAndroidData = async () => {
+    const initDevice = async () => {
       try {
         const Android = (window as any).Android;
-        if (Android && Android.getDeviceId && Android.getPhone) {
+        if (Android?.getDeviceId && Android?.getPhone) {
           setDeviceId(Android.getDeviceId() || null);
           setPhone(Android.getPhone() || "");
         } else throw new Error("Android bridge not available");
@@ -100,71 +71,63 @@ useEffect(() => {
         setPhone("+254700000000");
       }
     };
-    getAndroidData();
+    initDevice();
   }, []);
 
-  // ---------------- FETCH REFERRAL CODE ----------------
- useEffect(() => {
-  if (!deviceId) return;
+  // ---------------- FETCH USER INFO ----------------
+  useEffect(() => {
+    if (!deviceId) return;
 
-  fetch(`${SOCKET_URL}/api/user/${deviceId}`)
-    .then(res => res.json())
-    .then((data) => {
-      console.log("USER API RESPONSE:", data); // 👈 DEBUG
-
-      if (data?.referral_code) {
-        setReferralCode(data.referral_code);
-      }
-    })
-    .catch(console.error);
-}, [deviceId]);
+    fetch(`${SOCKET_URL}/api/user/${deviceId}`)
+      .then(res => res.json())
+      .then(data => {
+        console.log("USER API RESPONSE:", data);
+        if (data?.referral_code) setReferralCode(data.referral_code);
+      })
+      .catch(console.error);
+  }, [deviceId]);
 
   // ---------------- FETCH LEADERBOARD ----------------
   useEffect(() => {
     if (!deviceId) return;
+
     fetch(`${SOCKET_URL}/api/leaderboard?top=100`)
       .then(res => res.json())
-      .then((data) => {
-        const d = data.leaderboard.find((x: any) => x.device_id === deviceId);
-        if (d) setPoints(d.points);
+      .then(data => {
+        const user = data.leaderboard.find((x: any) => x.device_id === deviceId);
+        if (user) setPoints(user.points);
       })
-      .catch(console.log);
+      .catch(console.error);
   }, [deviceId]);
 
   // ---------------- FETCH REFERRALS ----------------
   useEffect(() => {
     if (!deviceId) return;
+
     fetch(`${SOCKET_URL}/api/referrals/${deviceId}`)
       .then(res => res.json())
-      .then((data) => {
+      .then(data => {
         setReferralCount(data.referral_count || 0);
         setReferrals(data.referrals || []);
       })
-      .catch(console.log);
+      .catch(console.error);
   }, [deviceId]);
 
-  
+  // ---------------- SOCKET.IO LIVE UPDATES ----------------
+  useEffect(() => {
+    if (!deviceId) return;
 
-// ---------------- SOCKET.IO LIVE UPDATES ----------------
-useEffect(() => {
-  if (!deviceId) return;
+    const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
 
-  const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
+    socket.on("connect", () => console.log("Connected to Socket.IO"));
+    socket.on("points_update", (data: PointsData) => {
+      if (data.device_id === deviceId) setPoints(data.total_points);
+    });
 
-  socket.on("connect", () => console.log("Connected to Socket.IO"));
-  socket.on("points_update", (data: PointsData) => {
-    if (data.device_id === deviceId) setPoints(data.total_points);
-  });
+    return () => socket.disconnect();
+  }, [deviceId]);
 
-  // Proper cleanup function
-  return () => {
-    socket.disconnect(); // just disconnect, do NOT return the socket
-  };
-}, [deviceId]);
-
-  
-
-  // ---------------- BOOST FEATURE ----------------
+  // ---------------- BOOST ACTION ----------------
   const boostAction = async (type: string, cost: number) => {
     if (!deviceId) return;
     if (points < cost) return alert("❌ Not enough points");
@@ -185,7 +148,7 @@ useEffect(() => {
     }
   };
 
-  // ---------------- SHARE ----------------
+  // ---------------- REFERRAL SHARE ----------------
   const referralLink = `${APP_LINK}?ref=${referralCode}`;
   const copyLink = () => {
     navigator.clipboard.writeText(referralLink);
@@ -226,7 +189,7 @@ useEffect(() => {
       const res = await fetch(`${SOCKET_URL}/link-phone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id: deviceId, phone, points: goal }),
+        body: JSON.stringify({ device_id: deviceId, phone }),
       });
       const data = await res.json();
       if (data.status === "ok") alert("✅ Phone saved and linked!");
@@ -235,6 +198,14 @@ useEffect(() => {
       console.error(err);
       alert("❌ Server error");
     }
+  };
+
+  // ---------------- WATCH ACTION ----------------
+  const startWatching = () => {
+    if (!deviceId) return;
+    localStorage.setItem("watch_start", Date.now().toString());
+    localStorage.setItem("deviceId", deviceId);
+    window.location.href = "https://dorawatch.one/home/";
   };
 
   const contentRows = [
@@ -254,18 +225,6 @@ useEffect(() => {
       ],
     },
   ];
-
-  // ---------------- WATCH ACTION ----------------
-  const startWatching = () => {
-    if (!deviceId) return;
-
-    localStorage.setItem("watch_start", Date.now().toString());
-    localStorage.setItem("deviceId", deviceId);
-
-    
-     // open in same WebView
-    window.location.href = "https://dorawatch.one/home/";
-  };
 
   // ---------------- UI ----------------
   return (
@@ -303,22 +262,18 @@ useEffect(() => {
             <p className="text-gray-400 text-sm">
               Total Points <span className="font-bold text-cyan-300">{points}</span>
             </p>
-
             <p className="text-gray-400 text-sm">
               Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left!!
             </p>
-
             <div className="w-full bg-gray-700 h-4 rounded-full overflow-hidden">
               <div
                 className="h-4 bg-cyan-400 transition-all duration-500"
                 style={{ width: `${progress}%`, boxShadow: "0 0 10px #00fff0, 0 0 20px #00fff0" }}
               />
             </div>
-
             <div className="bg-cyan-500 rounded-2xl p-4 flex justify-between items-center text-black font-bold shadow-md mt-2">
               <span>{reward}</span>
             </div>
-
             <button
               onClick={handleWithdraw}
               disabled={points < goal}
@@ -361,11 +316,7 @@ useEffect(() => {
                     onClick={startWatching}
                     className="min-w-[180px] cursor-pointer hover:scale-105 transition"
                   >
-                    <img
-                      src={item.img}
-                      alt={item.name}
-                      className="rounded-lg w-full h-[100px] object-cover"
-                    />
+                    <img src={item.img} alt={item.name} className="rounded-lg w-full h-[100px] object-cover" />
                     <p className="text-sm mt-1">{item.name}</p>
                   </div>
                 ))}
@@ -396,10 +347,9 @@ useEffect(() => {
           <div className="bg-gray-800 p-4 rounded-xl">
             <h2>Total Referrals: {referralCount}</h2>
             <div className="max-h-40 overflow-y-auto mt-2">
-              {referrals.map((r, i) => (
+              {referrals.length > 0 ? referrals.map((r, i) => (
                 <div key={i} className="border-b py-1 text-sm text-gray-300">{r}</div>
-              ))}
-              {referrals.length === 0 && <p className="text-gray-400">No referrals yet</p>}
+              )) : <p className="text-gray-400">No referrals yet</p>}
             </div>
           </div>
         </div>

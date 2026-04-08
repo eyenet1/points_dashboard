@@ -13,8 +13,8 @@ const APP_LINK = "https://github.com/eyenet1/affilliate/raw/main/latest.apk";
 export default function Dashboard() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [phone, setPhone] = useState<string>("");
-  const [referralCode, setReferralCode] = useState<string>(""); // The user's OWN code
-  const [inviterCode, setInviterCode] = useState<string>(""); // The code from a REF LINK
+  const [referralCode, setReferralCode] = useState<string>(""); 
+  const [inviterCode, setInviterCode] = useState<string>(""); 
   const [points, setPoints] = useState<number>(0);
   const [referralCount, setReferralCount] = useState<number>(0);
   const [referrals, setReferrals] = useState<string[]>([]);
@@ -26,7 +26,24 @@ export default function Dashboard() {
   const goal = 2500;
   const reward = "Ksh 1000";
 
-  // ---------------- CAPTURE REFERRAL LINK CODE ----------------
+  // ---------------- AUTO-EXTRACT FROM URL ON INPUT ----------------
+  const handleReferralChange = (val: string) => {
+    try {
+      // Check if the user pasted a full URL
+      if (val.includes("?ref=") || val.includes("&ref=")) {
+        const url = new URL(val.startsWith("http") ? val : `https://${val}`);
+        const code = url.searchParams.get("ref");
+        if (code) {
+          setInviterCode(code);
+          return;
+        }
+      }
+    } catch (e) {
+      // If it's not a valid URL, just treat it as a normal code
+    }
+    setInviterCode(val);
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
@@ -39,7 +56,6 @@ export default function Dashboard() {
     }
   }, []);
 
-  // ---------------- ANDROID BRIDGE ----------------
   useEffect(() => {
     const initDevice = async () => {
       try {
@@ -47,14 +63,10 @@ export default function Dashboard() {
         if (Android?.getDeviceId && Android?.getPhone) {
           const dId = Android.getDeviceId() || null;
           const p = Android.getPhone() || "";
-          
           setDeviceId(dId);
           setPhone(p);
-          
-          if (p && p.trim() !== "") {
-            setIsOnboarded(true);
-          }
-        } else throw new Error("Android bridge not available");
+          if (p && p.trim() !== "") setIsOnboarded(true);
+        } else throw new Error("Bridge missing");
       } catch {
         setDeviceId("test_device_123");
         setPhone(""); 
@@ -65,33 +77,24 @@ export default function Dashboard() {
     initDevice();
   }, []);
 
-  // ---------------- FETCH USER INFO ----------------
   useEffect(() => {
     if (!deviceId) return;
-
     fetch(`${SOCKET_URL}/api/user/${deviceId}`)
       .then(res => res.json())
-      .then(data => {
-        if (data?.referral_code) {
-          setReferralCode(data.referral_code);
-        }
-      })
+      .then(data => { if (data?.referral_code) setReferralCode(data.referral_code); })
       .catch(console.error);
   }, [deviceId]);
 
-  // ---------------- FETCH LEADERBOARD ----------------
   useEffect(() => {
     if (!deviceId) return;
     fetch(`${SOCKET_URL}/api/leaderboard?top=100`)
       .then(res => res.json())
       .then(data => {
-        const user = data.leaderboard.find((x: any) => x.device_id === deviceId);
+        const user = data.leaderboard?.find((x: any) => x.device_id === deviceId);
         if (user) setPoints(user.points);
-      })
-      .catch(console.error);
+      }).catch(console.error);
   }, [deviceId]);
 
-  // ---------------- FETCH REFERRALS ----------------
   useEffect(() => {
     if (!deviceId) return;
     fetch(`${SOCKET_URL}/api/referrals/${deviceId}`)
@@ -99,11 +102,9 @@ export default function Dashboard() {
       .then(data => {
         setReferralCount(data.referral_count || 0);
         setReferrals(data.referrals || []);
-      })
-      .catch(console.error);
+      }).catch(console.error);
   }, [deviceId]);
 
-  // ---------------- SOCKET.IO ----------------
   useEffect(() => {
     if (!deviceId) return;
     const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
@@ -114,8 +115,7 @@ export default function Dashboard() {
   }, [deviceId]);
 
   const boostAction = async (type: string, cost: number) => {
-    if (!deviceId) return;
-    if (points < cost) return alert("❌ Not enough points");
+    if (!deviceId || points < cost) return alert("❌ Not enough points");
     try {
       const res = await fetch(`${SOCKET_URL}/api/boost`, {
         method: "POST",
@@ -131,14 +131,12 @@ export default function Dashboard() {
   };
 
   const copyLink = () => {
-    const referralLink = `${APP_LINK}?ref=${referralCode}`;
-    navigator.clipboard.writeText(referralLink);
+    navigator.clipboard.writeText(`${APP_LINK}?ref=${referralCode}`);
     alert("✅ Link copied!");
   };
 
   const handleWithdraw = async () => {
-    if (!deviceId || !phone) return;
-    if (points < goal) return alert(`You need at least ${goal} points to withdraw.`);
+    if (!deviceId || !phone || points < goal) return;
     try {
       const res = await fetch(`${SOCKET_URL}/api/withdraw`, {
         method: "POST",
@@ -154,9 +152,7 @@ export default function Dashboard() {
   };
 
   const saveAccountInfo = async () => {
-    if (!deviceId) return alert("Device not ready");
-    if (!phone || phone.trim() === "") return alert("Phone cannot be empty");
-
+    if (!deviceId || !phone.trim()) return alert("Enter your phone");
     try {
       const res = await fetch(`${SOCKET_URL}/link-phone`, {
         method: "POST",
@@ -164,13 +160,11 @@ export default function Dashboard() {
         body: JSON.stringify({ device_id: deviceId, phone, referral_code: inviterCode }),
       });
       const data = await res.json();
-      
       if (data.status === "ok") {
-        alert("✅ Phone saved!");
         try { (window as any).Android?.savePhone(phone); } catch {}
         setIsOnboarded(true);
       } else {
-        alert("❌ Error: " + (data.message || "Unknown error"));
+        alert("❌ " + (data.message || "Error"));
       }
     } catch { alert("❌ Server error"); }
   };
@@ -182,36 +176,28 @@ export default function Dashboard() {
 
   if (!isOnboarded) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4 text-white">
         <div className="bg-gray-800 p-8 rounded-2xl w-full max-w-sm shadow-xl space-y-6">
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome! 🎉</h1>
-            <p className="text-gray-400 text-sm">Link your phone to start earning.</p>
+            <h1 className="text-3xl font-bold mb-2">Welcome! 🎉</h1>
+            <p className="text-gray-400 text-sm">Link your phone to start.</p>
           </div>
           <div className="space-y-4">
             <div>
               <label className="text-gray-300 font-semibold text-sm">Phone Number:</label>
-              <input
-                type="tel"
-                placeholder="+254..."
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl mt-1 bg-gray-700 text-white outline-none focus:ring-2 focus:ring-cyan-500"
-              />
+              <input type="tel" placeholder="+254..." value={phone} onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl mt-1 bg-gray-700 outline-none focus:ring-2 focus:ring-cyan-500" />
             </div>
             <div>
-              <label className="text-gray-300 font-semibold text-sm">Referral Code (Optional):</label>
-              <input
-                type="text"
-                placeholder="Enter code if any"
-                value={inviterCode}
-                onChange={(e) => setInviterCode(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl mt-1 bg-gray-700 text-white outline-none focus:ring-2 focus:ring-cyan-500"
-              />
+              <label className="text-gray-300 font-semibold text-sm">Referral (Code or URL):</label>
+              <input type="text" placeholder="Paste link or code" value={inviterCode} 
+                onChange={(e) => handleReferralChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl mt-1 bg-gray-700 outline-none focus:ring-2 focus:ring-cyan-500" />
+              <p className="text-[10px] text-gray-500 mt-1">If you paste a URL, we'll extract the code automatically.</p>
             </div>
           </div>
           <button onClick={saveAccountInfo} className="w-full bg-cyan-400 py-3 rounded-xl text-black font-bold text-lg hover:bg-cyan-300 transition shadow-lg">
-            Continue to Dashboard
+            Start Earning
           </button>
         </div>
       </div>
@@ -224,18 +210,9 @@ export default function Dashboard() {
 
       {/* MENU */}
       <div className="flex gap-3 mb-6 bg-gray-800 p-3 rounded-2xl shadow-md">
-        {[
-          { tab: "home", icon: "🏠", label: "Home" },
-          { tab: "referrals", icon: "👥", label: "Referrals" },
-          { tab: "account", icon: "👤", label: "Account" },
-        ].map(({ tab, icon, label }) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab as any)}
-            className={`flex flex-col items-center px-4 py-2 rounded-xl transition-all duration-200 ${
-              activeTab === tab ? "bg-cyan-500 text-black shadow-md scale-105" : "text-gray-400 hover:bg-gray-700 hover:text-white"
-            }`}
-          >
+        {[{ tab: "home", icon: "🏠", label: "Home" }, { tab: "referrals", icon: "👥", label: "Referrals" }, { tab: "account", icon: "👤", label: "Account" }].map(({ tab, icon, label }) => (
+          <button key={tab} onClick={() => setActiveTab(tab as any)}
+            className={`flex flex-col items-center px-4 py-2 rounded-xl transition-all ${activeTab === tab ? "bg-cyan-500 text-black scale-105" : "text-gray-400 hover:bg-gray-700"}`}>
             <span className="text-2xl">{icon}</span>
             <span className="text-sm font-semibold mt-1">{label}</span>
           </button>
@@ -246,10 +223,8 @@ export default function Dashboard() {
         <div className="space-y-4 w-full max-w-sm">
           <div className="bg-gray-800 p-6 rounded-xl space-y-4">
             <h2 className="text-xl text-gray-300 font-semibold">Earnings</h2>
-            <p className="text-gray-400 text-sm">Total Points <span className="font-bold text-cyan-300">{points}</span></p>
-            <p className="text-gray-400 text-sm">
-              Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left to withdraw!
-            </p>
+            <p className="text-gray-400 text-sm">Points: <span className="font-bold text-cyan-300">{points}</span></p>
+            <p className="text-gray-400 text-sm">Remaining: <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span></p>
             <div className="w-full bg-gray-700 h-4 rounded-full overflow-hidden">
               <div className="h-4 bg-cyan-400 transition-all duration-500" style={{ width: `${progress}%` }} />
             </div>
@@ -259,13 +234,9 @@ export default function Dashboard() {
           </div>
 
           <div className="bg-gray-800 p-4 rounded-xl space-y-3">
-            <h2 className="text-lg font-semibold">🚀 Boost Engagement</h2>
-            <button onClick={() => boostAction("like", 500)} className="bg-blue-500 w-full py-2 rounded hover:bg-blue-400 transition">
-              👍 Buy Likes (500 pts)
-            </button>
-            <button onClick={() => boostAction("follow", 1000)} className="bg-purple-500 w-full py-2 rounded hover:bg-purple-400 transition">
-              👤 Buy Followers (1000 pts)
-            </button>
+            <h2 className="text-lg font-semibold text-center">🚀 Boosts</h2>
+            <button onClick={() => boostAction("like", 500)} className="bg-blue-500 w-full py-2 rounded hover:bg-blue-400">👍 Buy Likes (500 pts)</button>
+            <button onClick={() => boostAction("follow", 1000)} className="bg-purple-500 w-full py-2 rounded hover:bg-purple-400">👤 Buy Followers (1000 pts)</button>
           </div>
         </div>
       )}
@@ -273,32 +244,30 @@ export default function Dashboard() {
       {activeTab === "referrals" && (
         <div className="space-y-6 w-full max-w-md">
           <div className="bg-gray-800 p-4 rounded-xl">
-            <h2 className="text-gray-300 mb-2 font-semibold">Your Sharing Code</h2>
+            <h2 className="text-gray-300 mb-2 font-semibold text-center">Share & Earn</h2>
             <div className="flex gap-2">
-                <input readOnly type="text" value={referralCode} className="bg-gray-700 text-white px-3 py-2 rounded flex-1 outline-none" />
-                <button onClick={copyLink} className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-500 transition">Copy</button>
+                <input readOnly type="text" value={referralCode} className="bg-gray-700 px-3 py-2 rounded flex-1 text-sm" />
+                <button onClick={copyLink} className="bg-blue-600 px-4 py-2 rounded">Copy Link</button>
             </div>
           </div>
           <div className="bg-gray-800 p-4 rounded-xl">
-            <h2 className="font-semibold">Total Referrals: {referralCount}</h2>
+            <h2 className="font-semibold text-center">Total Referrals: {referralCount}</h2>
             <div className="max-h-40 overflow-y-auto mt-2">
               {referrals.length > 0 ? referrals.map((r, i) => (
                 <div key={i} className="border-b border-gray-700 py-2 text-sm text-gray-300">{r}</div>
-              )) : <p className="text-gray-400">No referrals yet</p>}
+              )) : <p className="text-gray-400 text-center">No referrals yet</p>}
             </div>
           </div>
         </div>
       )}
 
       {activeTab === "account" && (
-        <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm space-y-4 text-center shadow-lg">
-            <div className="flex flex-col items-center">
-                <div className="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center text-3xl mb-2">👤</div>
-                <p className="text-xl font-bold text-cyan-400">{phone || "No Phone Linked"}</p>
-            </div>
-            <div className="text-left bg-gray-900 p-4 rounded-lg space-y-2">
-                <p className="text-sm text-gray-400"><b>Device ID:</b> <br/><span className="text-gray-300 break-all">{deviceId}</span></p>
-                <p className="text-sm text-gray-400"><b>My Referral Code:</b> <br/><span className="text-gray-300">{referralCode}</span></p>
+        <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm space-y-4 text-center">
+            <div className="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center text-3xl mx-auto mb-2">👤</div>
+            <p className="text-xl font-bold text-cyan-400">{phone || "No Phone"}</p>
+            <div className="text-left bg-gray-900 p-4 rounded-lg text-xs space-y-2">
+                <p className="text-gray-400"><b>Device ID:</b> <span className="text-gray-300 break-all">{deviceId}</span></p>
+                <p className="text-gray-400"><b>My Code:</b> <span className="text-gray-300">{referralCode}</span></p>
             </div>
         </div>
       )}

@@ -1,4 +1,3 @@
-// src/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { DefaultEventsMap } from "@socket.io/component-emitter";
@@ -73,7 +72,6 @@ export default function Dashboard() {
     fetch(`${SOCKET_URL}/api/user/${deviceId}`)
       .then(res => res.json())
       .then(data => {
-        // This is the user's personal referral code for sharing
         if (data?.referral_code) {
           setReferralCode(data.referral_code);
         }
@@ -155,7 +153,6 @@ export default function Dashboard() {
     } catch { alert("❌ Server error"); }
   };
 
-  // ---------------- ONBOARDING SAVE ----------------
   const saveAccountInfo = async () => {
     if (!deviceId) return alert("Device not ready");
     if (!phone || phone.trim() === "") return alert("Phone cannot be empty");
@@ -164,7 +161,6 @@ export default function Dashboard() {
       const res = await fetch(`${SOCKET_URL}/link-phone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Use inviterCode here so we tell the server who invited the new user
         body: JSON.stringify({ device_id: deviceId, phone, referral_code: inviterCode }),
       });
       const data = await res.json();
@@ -208,13 +204,13 @@ export default function Dashboard() {
               <input
                 type="text"
                 placeholder="Enter code if any"
-                value={inviterCode} // Show the code from the link, NOT the user's own code
+                value={inviterCode}
                 onChange={(e) => setInviterCode(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl mt-1 bg-gray-700 text-white outline-none focus:ring-2 focus:ring-cyan-500"
               />
             </div>
           </div>
-          <button onClick={saveAccountInfo} className="w-full bg-cyan-400 py-3 rounded-xl text-black font-bold text-lg hover:bg-cyan-300 transition">
+          <button onClick={saveAccountInfo} className="w-full bg-cyan-400 py-3 rounded-xl text-black font-bold text-lg hover:bg-cyan-300 transition shadow-lg">
             Continue to Dashboard
           </button>
         </div>
@@ -231,7 +227,6 @@ export default function Dashboard() {
         {[
           { tab: "home", icon: "🏠", label: "Home" },
           { tab: "referrals", icon: "👥", label: "Referrals" },
-          { tab: "watch", icon: "🎬", label: "Watch" },
           { tab: "account", icon: "👤", label: "Account" },
         ].map(({ tab, icon, label }) => (
           <button
@@ -250,13 +245,26 @@ export default function Dashboard() {
       {activeTab === "home" && (
         <div className="space-y-4 w-full max-w-sm">
           <div className="bg-gray-800 p-6 rounded-xl space-y-4">
-            <h2 className="text-xl text-gray-300 font-semibold">Get Money</h2>
+            <h2 className="text-xl text-gray-300 font-semibold">Earnings</h2>
             <p className="text-gray-400 text-sm">Total Points <span className="font-bold text-cyan-300">{points}</span></p>
+            <p className="text-gray-400 text-sm">
+              Only <span className="font-bold text-cyan-300">{remaining.toLocaleString()}</span> points left to withdraw!
+            </p>
             <div className="w-full bg-gray-700 h-4 rounded-full overflow-hidden">
-              <div className="h-4 bg-cyan-400 transition-all" style={{ width: `${progress}%` }} />
+              <div className="h-4 bg-cyan-400 transition-all duration-500" style={{ width: `${progress}%` }} />
             </div>
-            <button onClick={handleWithdraw} disabled={points < goal} className={`w-full py-2 rounded-xl font-semibold mt-2 ${points >= goal ? "bg-cyan-400 text-black" : "bg-gray-600 text-gray-400"}`}>
+            <button onClick={handleWithdraw} disabled={points < goal} className={`w-full py-2 rounded-xl font-semibold mt-2 transition-colors ${points >= goal ? "bg-cyan-400 text-black hover:bg-cyan-300" : "bg-gray-600 text-gray-400"}`}>
               Withdraw {reward}
+            </button>
+          </div>
+
+          <div className="bg-gray-800 p-4 rounded-xl space-y-3">
+            <h2 className="text-lg font-semibold">🚀 Boost Engagement</h2>
+            <button onClick={() => boostAction("like", 500)} className="bg-blue-500 w-full py-2 rounded hover:bg-blue-400 transition">
+              👍 Buy Likes (500 pts)
+            </button>
+            <button onClick={() => boostAction("follow", 1000)} className="bg-purple-500 w-full py-2 rounded hover:bg-purple-400 transition">
+              👤 Buy Followers (1000 pts)
             </button>
           </div>
         </div>
@@ -265,14 +273,14 @@ export default function Dashboard() {
       {activeTab === "referrals" && (
         <div className="space-y-6 w-full max-w-md">
           <div className="bg-gray-800 p-4 rounded-xl">
-            <h2 className="text-gray-300 mb-2">Your Sharing Code</h2>
+            <h2 className="text-gray-300 mb-2 font-semibold">Your Sharing Code</h2>
             <div className="flex gap-2">
-                <input readOnly type="text" value={referralCode} className="bg-gray-700 text-white px-3 py-2 rounded flex-1" />
-                <button onClick={copyLink} className="bg-blue-600 px-4 py-2 rounded">Copy</button>
+                <input readOnly type="text" value={referralCode} className="bg-gray-700 text-white px-3 py-2 rounded flex-1 outline-none" />
+                <button onClick={copyLink} className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-500 transition">Copy</button>
             </div>
           </div>
           <div className="bg-gray-800 p-4 rounded-xl">
-            <h2>Total Referrals: {referralCount}</h2>
+            <h2 className="font-semibold">Total Referrals: {referralCount}</h2>
             <div className="max-h-40 overflow-y-auto mt-2">
               {referrals.length > 0 ? referrals.map((r, i) => (
                 <div key={i} className="border-b border-gray-700 py-2 text-sm text-gray-300">{r}</div>
@@ -283,10 +291,15 @@ export default function Dashboard() {
       )}
 
       {activeTab === "account" && (
-        <div className="bg-gray-800 p-4 rounded-xl w-full max-w-sm space-y-4 text-center">
-            <p className="text-lg"><b>Phone:</b> {phone}</p>
-            <p className="text-sm text-gray-400"><b>Device ID:</b> {deviceId}</p>
-            <p className="text-sm text-gray-400"><b>Your Code:</b> {referralCode}</p>
+        <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm space-y-4 text-center shadow-lg">
+            <div className="flex flex-col items-center">
+                <div className="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center text-3xl mb-2">👤</div>
+                <p className="text-xl font-bold text-cyan-400">{phone || "No Phone Linked"}</p>
+            </div>
+            <div className="text-left bg-gray-900 p-4 rounded-lg space-y-2">
+                <p className="text-sm text-gray-400"><b>Device ID:</b> <br/><span className="text-gray-300 break-all">{deviceId}</span></p>
+                <p className="text-sm text-gray-400"><b>My Referral Code:</b> <br/><span className="text-gray-300">{referralCode}</span></p>
+            </div>
         </div>
       )}
     </div>

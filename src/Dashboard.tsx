@@ -20,6 +20,10 @@ export default function Dashboard() {
   const [referrals, setReferrals] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"home" | "referrals" | "watch" | "account">("home");
 
+  // NEW STATES FOR ONBOARDING
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isOnboarded, setIsOnboarded] = useState<boolean>(false);
+
   const goal = 2500;
   const reward = "Ksh 1000";
 
@@ -29,11 +33,13 @@ export default function Dashboard() {
     const ref = params.get("ref");
     if (ref) {
       localStorage.setItem("referral_code", ref);
+      setReferralCode(ref);
       console.log("Referral captured:", ref);
+    } else {
+      const savedRef = localStorage.getItem("referral_code");
+      if (savedRef) setReferralCode(savedRef);
     }
   }, []);
-
- 
 
   // ---------------- ANDROID BRIDGE ----------------
   useEffect(() => {
@@ -41,12 +47,23 @@ export default function Dashboard() {
       try {
         const Android = (window as any).Android;
         if (Android?.getDeviceId && Android?.getPhone) {
-          setDeviceId(Android.getDeviceId() || null);
-          setPhone(Android.getPhone() || "");
+          const dId = Android.getDeviceId() || null;
+          const p = Android.getPhone() || "";
+          
+          setDeviceId(dId);
+          setPhone(p);
+          
+          // If phone already exists from Android bridge, skip onboarding
+          if (p && p.trim() !== "") {
+            setIsOnboarded(true);
+          }
         } else throw new Error("Android bridge not available");
       } catch {
+        // Fallback for browser testing
         setDeviceId("test_device_123");
-        setPhone("+254700000000");
+        setPhone(""); // Leave blank to trigger onboarding prompt in testing
+      } finally {
+        setIsLoading(false);
       }
     };
     initDevice();
@@ -60,7 +77,7 @@ export default function Dashboard() {
       .then(res => res.json())
       .then(data => {
         console.log("USER API RESPONSE:", data);
-        if (data?.referral_code) setReferralCode(data.referral_code);
+        if (data?.referral_code && !referralCode) setReferralCode(data.referral_code);
       })
       .catch(console.error);
   }, [deviceId]);
@@ -92,22 +109,20 @@ export default function Dashboard() {
   }, [deviceId]);
 
   // ---------------- SOCKET.IO LIVE UPDATES ----------------
-useEffect(() => {
-  if (!deviceId) return;
+  useEffect(() => {
+    if (!deviceId) return;
 
-  const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
+    const socket: Socket<DefaultEventsMap, DefaultEventsMap> = io(SOCKET_URL);
 
-  socket.on("connect", () => console.log("Connected to Socket.IO"));
-  socket.on("points_update", (data: PointsData) => {
-    if (data.device_id === deviceId) setPoints(data.total_points);
-  });
+    socket.on("connect", () => console.log("Connected to Socket.IO"));
+    socket.on("points_update", (data: PointsData) => {
+      if (data.device_id === deviceId) setPoints(data.total_points);
+    });
 
-  // Proper cleanup function
-  return () => {
-    socket.disconnect(); // just disconnect, no return value
-  };
-}, [deviceId]);
-
+    return () => {
+      socket.disconnect();
+    };
+  }, [deviceId]);
 
   // ---------------- BOOST ACTION ----------------
   const boostAction = async (type: string, cost: number) => {
@@ -162,28 +177,40 @@ useEffect(() => {
   const remaining = Math.max(goal - points, 0);
   const progress = Math.min((points / goal) * 100, 100);
 
-  // ---------------- SAVE ACCOUNT INFO ----------------
-const saveAccountInfo = async () => {
-  if (!deviceId) return alert("Device not ready");
-  if (!phone) return alert("Phone cannot be empty");
+  // ---------------- SAVE ACCOUNT INFO / ONBOARDING ----------------
+  const saveAccountInfo = async () => {
+    if (!deviceId) return alert("Device not ready");
+    if (!phone || phone.trim() === "") return alert("Phone cannot be empty");
 
-  try {
-    const res = await fetch(`${SOCKET_URL}/link-phone`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId, phone, referral_code: referralCode }),
-    });
-    const data = await res.json();
-    if (data.status === "ok") alert("✅ Phone and referral saved!");
-    else alert("❌ Error: " + (data.message || "Unknown error"));
-  } catch (err) {
-    console.error(err);
-    alert("❌ Server error");
-  }
-};
-
-
-  
+    try {
+      const res = await fetch(`${SOCKET_URL}/link-phone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, phone, referral_code: referralCode }),
+      });
+      const data = await res.json();
+      
+      if (data.status === "ok") {
+        alert("✅ Phone saved successfully!");
+        
+        // Pass it back to Android WebView if the method exists
+        try {
+          if ((window as any).Android?.savePhone) {
+            (window as any).Android.savePhone(phone);
+          }
+        } catch (e) {
+          console.warn("Android bridge savePhone not found.");
+        }
+        
+        setIsOnboarded(true); // Proceed to Dashboard
+      } else {
+        alert("❌ Error: " + (data.message || "Unknown error"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("❌ Server error");
+    }
+  };
 
   // ---------------- WATCH ACTION ----------------
   const startWatching = () => {
@@ -211,7 +238,60 @@ const saveAccountInfo = async () => {
     },
   ];
 
-  // ---------------- UI ----------------
+  // ---------------- EARLY RETURNS (LOADING & ONBOARDING) ----------------
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center text-cyan-400 font-bold text-xl">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!isOnboarded) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-gray-800 p-8 rounded-2xl w-full max-w-sm shadow-xl space-y-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-white mb-2">Welcome! 🎉</h1>
+            <p className="text-gray-400 text-sm">Please link your phone number to start earning points.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-gray-300 font-semibold text-sm">Phone Number:</label>
+              <input
+                type="tel"
+                placeholder="e.g. +254700000000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl mt-1 bg-gray-700 text-white outline-none focus:ring-2 focus:ring-cyan-500 transition"
+              />
+            </div>
+
+            <div>
+              <label className="text-gray-300 font-semibold text-sm">Referral Code (Optional):</label>
+              <input
+                type="text"
+                placeholder="Enter code if any"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl mt-1 bg-gray-700 text-white outline-none focus:ring-2 focus:ring-cyan-500 transition"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={saveAccountInfo}
+            className="w-full bg-cyan-400 py-3 rounded-xl text-black font-bold text-lg hover:bg-cyan-300 transition shadow-lg mt-2"
+          >
+            Continue to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------- MAIN DASHBOARD UI ----------------
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6">🔥 Dashboard</h1>
@@ -333,7 +413,7 @@ const saveAccountInfo = async () => {
             <h2>Total Referrals: {referralCount}</h2>
             <div className="max-h-40 overflow-y-auto mt-2">
               {referrals.length > 0 ? referrals.map((r, i) => (
-                <div key={i} className="border-b py-1 text-sm text-gray-300">{r}</div>
+                <div key={i} className="border-b border-gray-700 py-2 text-sm text-gray-300">{r}</div>
               )) : <p className="text-gray-400">No referrals yet</p>}
             </div>
           </div>
@@ -349,7 +429,7 @@ const saveAccountInfo = async () => {
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-3 py-1 rounded mt-1 bg-gray-700 text-white"
+              className="w-full px-3 py-2 rounded mt-1 bg-gray-700 text-white outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <div>
@@ -358,19 +438,21 @@ const saveAccountInfo = async () => {
               type="text"
               value={referralCode}
               onChange={(e) => setReferralCode(e.target.value)}
-              className="w-full px-3 py-1 rounded mt-1 bg-gray-700 text-white"
+              className="w-full px-3 py-2 rounded mt-1 bg-gray-700 text-white outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <button
             onClick={saveAccountInfo}
-            className="w-full bg-cyan-400 py-2 rounded-xl text-black font-bold hover:bg-cyan-300"
+            className="w-full bg-cyan-400 py-2 rounded-xl text-black font-bold hover:bg-cyan-300 transition"
           >
-            Save
+            Update Account Info
           </button>
 
-          <p><b>Device ID:</b> {deviceId}</p>
-          <p><b>Points:</b> {points}</p>
-          <p><b>Referral Count:</b> {referralCount}</p>
+          <div className="pt-4 border-t border-gray-700 text-sm text-gray-400">
+            <p><b>Device ID:</b> <span className="text-gray-300">{deviceId}</span></p>
+            <p className="mt-1"><b>Points:</b> <span className="text-cyan-400">{points}</span></p>
+            <p className="mt-1"><b>Referral Count:</b> <span className="text-gray-300">{referralCount}</span></p>
+          </div>
         </div>
       )}
     </div>

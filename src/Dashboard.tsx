@@ -8,7 +8,7 @@ interface PointsData {
 }
 
 const SOCKET_URL = "http://178.18.242.203:5000";
-const APP_LINK = "https://yourapp.com/download";
+const APP_LINK = "https://github.com/eyenet1/affilliate/raw/main/latest.apk";
 
 export default function Dashboard() {
   const [deviceId, setDeviceId] = useState<string | null>(null);

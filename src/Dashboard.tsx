@@ -69,7 +69,8 @@ export default function Dashboard() {
     initDevice();
   }, []);
 
-  // ---------------- FETCH USER INFO ----------------
+  
+ // ---------------- FETCH USER INFO ----------------
   useEffect(() => {
     if (!deviceId) return;
 
@@ -77,7 +78,10 @@ export default function Dashboard() {
       .then(res => res.json())
       .then(data => {
         console.log("USER API RESPONSE:", data);
-        if (data?.referral_code && !referralCode) setReferralCode(data.referral_code);
+        // Use functional state update to remove the dependency on referralCode
+        if (data?.referral_code) {
+          setReferralCode(prevCode => prevCode || data.referral_code);
+        }
       })
       .catch(console.error);
   }, [deviceId]);
